@@ -44,7 +44,10 @@ it-workbench/
 │       ├── assets/tokens.css   设计令牌（来自 DESIGN.md）
 │       ├── components/         AppModal / TaskBadge
 │       └── views/              HomeView（首页）/ TasksView（任务列表）
-├── scripts/build-all.sh        一体化打包脚本
+├── scripts/
+│   ├── build-all.sh            一体化打包脚本
+│   ├── mysql-start.sh          启动本机 MySQL
+│   └── mysql-stop.sh           停止本机 MySQL
 ├── Dockerfile                  三阶段构建（前端 → 后端 → 运行镜像）
 └── docker-compose.yml          MySQL + 后端一键部署
 ```
@@ -53,13 +56,48 @@ it-workbench/
 
 要求：JDK 17、Maven 3.9+、Node 18+、MySQL 8。
 
-**1. 初始化数据库**
+### 1. 启动 MySQL
+
+本机的 MySQL 是用**官方二进制包**安装的（不是 `brew services`，没有系统服务托管），需要手动拉起：
 
 ```bash
-mysql -uroot -p < backend/sql/init.sql
+./scripts/mysql-start.sh     # 启动（幂等，已在运行会直接提示）
+./scripts/mysql-stop.sh      # 停止（优雅 shutdown，数据保留）
 ```
 
-**2. 启动后端**（默认 8080 端口）
+脚本默认参数（可用环境变量覆盖：`MYSQL_HOME`、`MYSQL_DATA`、`MYSQL_PORT`、`MYSQL_USER`、`MYSQL_PASSWORD`）：
+
+| 项 | 值 |
+|---|---|
+| 安装目录 | `~/tools/mysql-26.7.0-macos15-arm64` |
+| 数据目录 | `~/tools/mysql-data` |
+| 端口 | `127.0.0.1:3306` |
+| 账号 | `root` / `root123456` |
+| 库 | `it_workbench` |
+| 错误日志 | `~/tools/mysql-data/mysqld.err` |
+
+等价的原始命令（不用脚本时）：
+
+```bash
+~/tools/mysql-26.7.0-macos15-arm64/bin/mysqld \
+  --datadir=$HOME/tools/mysql-data --port=3306 --bind-address=127.0.0.1 --skip-log-bin \
+  --log-error=$HOME/tools/mysql-data/mysqld.err &
+
+# 停止
+~/tools/mysql-26.7.0-macos15-arm64/bin/mysqladmin -uroot -proot123456 -h127.0.0.1 shutdown
+```
+
+> 已按 `--skip-log-bin` 启动（本地开发库不需要二进制日志）。若需 PITR/主从，删掉该参数。
+
+### 2. 初始化数据库（仅首次）
+
+数据目录已初始化过，正常情况下跳过。若需重建：
+
+```bash
+mysql -uroot -proot123456 -h127.0.0.1 < backend/sql/init.sql
+```
+
+### 3. 启动后端（默认 8080 端口）
 
 ```bash
 cd backend
@@ -69,7 +107,7 @@ mvn spring-boot:run
 数据库连接可用环境变量覆盖：`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 默认值：`localhost:3306/it_workbench`，账号 `root` / `root123456`。
 
-**3. 启动前端**（默认 5173 端口，`/api` 由 Vite 代理到 8080）
+### 4. 启动前端（默认 5173 端口，`/api` 由 Vite 代理到 8080）
 
 ```bash
 cd frontend
