@@ -1,0 +1,24 @@
+# ===== 构建产物 =====
+backend/target/
+frontend/dist/
+frontend/node_modules/
+# 一体化打包时复制过来的前端产物（由 scripts/build-all.sh 生成）
+backend/src/main/resources/static/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# ===== 系统 / 日志 =====
+.DS_Store
+Thumbs.db
+*.log
+logs/
+
+# ===== 本地环境变量 =====
+.env
+.env.local
+frontend/.env.local

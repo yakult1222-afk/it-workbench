@@ -1,0 +1,272 @@
+/* ===== Claude 风格设计令牌（来源 design-md/claude/DESIGN.md）===== */
+:root {
+  /* 色彩 */
+  --primary: #cc785c;          /* 珊瑚色主按钮 */
+  --primary-active: #a9583e;
+  --primary-disabled: #e6dfd8;
+  --ink: #141413;              /* 主文本 */
+  --body: #3d3d3a;
+  --body-strong: #252523;
+  --muted: #6c6a64;
+  --muted-soft: #8e8b82;
+  --hairline: #e6dfd8;         /* 1px 边框 */
+  --hairline-soft: #ebe6df;
+  --canvas: #faf9f5;           /* 奶油画布 */
+  --surface-soft: #f5f0e8;
+  --surface-card: #efe9de;     /* 奶油卡片 */
+  --surface-cream-strong: #e8e0d2;
+  --surface-dark: #181715;     /* 深色面板 */
+  --surface-dark-elevated: #252320;
+  --surface-dark-soft: #1f1e1b;
+  --on-primary: #ffffff;
+  --on-dark: #faf9f5;
+  --on-dark-soft: #a09d96;
+  --accent-teal: #5db8a6;
+  --accent-amber: #e8a55a;
+  --success: #5db872;
+  --warning: #d4a017;
+  --error: #c64545;
+
+  /* 字体：衬线标题走系统衬线（中文用宋体，英文用 Garamond/Times），正文走系统无衬线 */
+  --font-display: 'Cormorant Garamond', Garamond, 'Songti SC', 'STSong', 'Times New Roman', serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Segoe UI', Roboto, sans-serif;
+
+  /* 圆角 */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-pill: 9999px;
+
+  /* 间距 */
+  --sp-xs: 8px;
+  --sp-sm: 12px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 32px;
+  --sp-xxl: 48px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--primary);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ===== 排版 ===== */
+.display-md {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.5px;
+}
+.display-sm {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+.title-md {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.title-sm {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.body-md {
+  font-size: 16px;
+  color: var(--body);
+}
+.body-sm {
+  font-size: 14px;
+  color: var(--body);
+}
+.caption {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.caption-uppercase {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* ===== 按钮 ===== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: var(--r-md);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+.btn-primary:hover {
+  background: var(--primary-active);
+}
+.btn-primary:active {
+  background: var(--primary-active);
+}
+.btn-primary:disabled {
+  background: var(--primary-disabled);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.btn-secondary {
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+}
+.btn-secondary:hover {
+  background: var(--surface-soft);
+}
+.btn-secondary-on-dark {
+  background: var(--surface-dark-elevated);
+  color: var(--on-dark);
+}
+.btn-sm {
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+}
+.btn-danger-text {
+  background: transparent;
+  color: var(--error);
+  height: 32px;
+  padding: 0 8px;
+}
+.btn-danger-text:hover {
+  background: rgba(198, 69, 69, 0.08);
+}
+
+/* ===== 表单 ===== */
+.input,
+.select,
+.textarea {
+  width: 100%;
+  height: 40px;
+  padding: 10px 14px;
+  background: var(--canvas);
+  color: var(--ink);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  font-family: var(--font-body);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.textarea {
+  height: auto;
+  min-height: 88px;
+  resize: vertical;
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(204, 120, 92, 0.15);
+}
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--body-strong);
+}
+
+/* ===== 徽章 ===== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 12px;
+  border-radius: var(--r-pill);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  background: var(--surface-card);
+  color: var(--ink);
+  white-space: nowrap;
+}
+.badge-coral {
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+.badge-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+.badge-success {
+  background: rgba(93, 184, 114, 0.14);
+  color: #3f7a4f;
+}
+.badge-warning {
+  background: rgba(212, 160, 23, 0.14);
+  color: #8a6a0d;
+}
+.badge-error {
+  background: rgba(198, 69, 69, 0.12);
+  color: var(--error);
+}
+
+/* ===== 卡片 ===== */
+.card {
+  background: var(--surface-card);
+  border-radius: var(--r-lg);
+  padding: var(--sp-xl);
+}
+.card-canvas {
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-lg);
+  padding: var(--sp-xl);
+}
+.card-dark {
+  background: var(--surface-dark);
+  color: var(--on-dark);
+  border-radius: var(--r-lg);
+  padding: var(--sp-xl);
+}
