@@ -12,7 +12,7 @@ IT 运维日常任务的登记、跟踪与当日完成率看板。前后端分�
 **任务列表**
 - 任务增删改查，字段：日期、任务类型（审批 / 硬件问题 / 软件问题 / 网络问题）、任务描述、任务状态（完成 / 未完成 / 延期）、任务总结
 - 按日期 / 类型 / 状态筛选 + 分页
-- 日报总结按钮（当前为占位：弹窗显示「等待后续开发」，并提供一键复制）
+- 日报总结：将当日任务的描述/状态/总结交由 AI 汇总为约 200 字中文日报，弹窗展示并支持一键复制（未配置 AI 时自动降级为模板汇总）
 
 ## 技术栈
 
@@ -148,6 +148,7 @@ MySQL 首次启动自动执行 `backend/sql/init.sql`。访问 http://localhost:
 | PUT | `/api/tasks/{id}` | 修改任务 |
 | DELETE | `/api/tasks/{id}` | 删除任务 |
 | GET | `/api/news/hardware` | PC 硬件资讯列表 |
+| GET | `/api/daily-summary?date=` | 日报总结（date 缺省为今天），返回 `{content, source, taskCount, date}` |
 
 新增/修改请求体示例：
 
@@ -167,6 +168,11 @@ MySQL 首次启动自动执行 `backend/sql/init.sql`。访问 http://localhost:
 |---|---|---|
 | `workbench.news.sources` | IT之家、快科技、Tom's Hardware 的 RSS | 硬件资讯源，逗号分隔，按顺序尝试 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DB` / `MYSQL_USER` / `MYSQL_PASSWORD` | localhost / 3306 / it_workbench / root / root123456 | 数据库连接 |
+| `AI_BASE_URL`（即 `workbench.ai.base-url`） | `https://api.deepseek.com/v1` | AI 服务地址，任何 OpenAI 兼容接口均可（GLM / 通义 / OpenAI / 本地 Ollama 等） |
+| `AI_API_KEY`（即 `workbench.ai.api-key`） | 空 | AI 服务密钥；**留空则日报走模板汇总，不调用 AI** |
+| `AI_MODEL`（即 `workbench.ai.model`） | `deepseek-chat` | 模型名 |
+
+> AI 调用发生在后端，密钥不会暴露给浏览器。接口层为 OpenAI 兼容协议，超时 30 秒；调用失败自动降级为模板汇总，前端会标注来源（AI 生成 / 模板生成）。
 
 ## 设计规范
 
@@ -179,6 +185,6 @@ MySQL 首次启动自动执行 `backend/sql/init.sql`。访问 http://localhost:
 
 ## 已知说明
 
-- 日报总结为占位功能，弹窗文案「等待后续开发」+ 一键复制，业务逻辑待后续开发。
 - 硬件资讯源不可达时自动降级为内置示例数据（标题以「示例：」开头），不影响页面展示。
+- 日报总结未配置 `AI_API_KEY` 或 AI 调用失败时，自动降级为模板汇总（前端来源徽章会显示「模板生成」）。
 - CORS 当前放开全部来源，便于本机与内网联调；对外发布时建议收敛为具体域名。

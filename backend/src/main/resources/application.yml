@@ -19,6 +19,14 @@ mybatis-plus:
   global-config:
     banner: false
 
+# 日报总结 AI 配置（OpenAI 兼容协议：DeepSeek / GLM / 通义 / OpenAI / Ollama 均可）
+workbench:
+  ai:
+    base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
+    api-key: ${AI_API_KEY:}      # 留空 = 不调 AI，日报走模板汇总
+    model: ${AI_MODEL:deepseek-chat}
+    timeout-ms: 30000
+
 logging:
   level:
     com.qinghuan.workbench: info
