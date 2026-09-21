@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, reactive, ref, computed } from 'vue'
-import { taskApi } from '../api'
+import { taskApi, dailySummaryApi } from '../api'
 import TaskBadge from '../components/TaskBadge.vue'
 import AppModal from '../components/AppModal.vue'
 
@@ -128,19 +128,38 @@ async function remove(row) {
   }
 }
 
-// ---- 日报总结弹窗（占位，待后续开发） ----
+// ---- 日报总结弹窗（AI 汇总当日任务，未配置 AI 时为模板汇总）----
 const dailyOpen = ref(false)
+const dailyLoading = ref(false)
+const dailyError = ref('')
+const dailyData = ref(null) // { date, taskCount, source: 'ai' | 'template', content }
 const copyState = ref('') // '' | 'ok'
-const DAILY_TEXT = '等待后续开发'
+
+async function openDaily() {
+  dailyOpen.value = true
+  dailyLoading.value = true
+  dailyError.value = ''
+  dailyData.value = null
+  copyState.value = ''
+  try {
+    dailyData.value = await dailySummaryApi.generate()
+  } catch (e) {
+    dailyError.value = e.message || '日报生成失败'
+  } finally {
+    dailyLoading.value = false
+  }
+}
 
 async function copyDaily() {
+  const text = dailyData.value?.content || ''
+  if (!text) return
   try {
     if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(DAILY_TEXT)
+      await navigator.clipboard.writeText(text)
     } else {
       // 非安全上下文降级方案
       const ta = document.createElement('textarea')
-      ta.value = DAILY_TEXT
+      ta.value = text
       ta.style.position = 'fixed'
       ta.style.opacity = '0'
       document.body.appendChild(ta)
@@ -168,7 +187,7 @@ onMounted(load)
         <p class="body-md head-sub">IT 日常任务登记与跟踪</p>
       </div>
       <div class="page-head-actions">
-        <button class="btn btn-secondary" @click="dailyOpen = true">日报总结</button>
+        <button class="btn btn-secondary" @click="openDaily">日报总结</button>
         <button class="btn btn-primary" @click="openCreate">+ 新建任务</button>
       </div>
     </section>
@@ -287,13 +306,33 @@ onMounted(load)
       </form>
     </AppModal>
 
-    <!-- 日报总结弹窗（占位） -->
-    <AppModal :open="dailyOpen" title="日报总结" width="420px" @close="dailyOpen = false">
+    <!-- 日报总结弹窗（AI 汇总） -->
+    <AppModal :open="dailyOpen" title="日报总结" width="560px" @close="dailyOpen = false">
       <div class="daily-modal">
-        <p class="daily-text">{{ DAILY_TEXT }}</p>
-        <button class="btn btn-primary" @click="copyDaily">
-          {{ copyState === 'ok' ? '已复制 ✓' : '一键复制' }}
-        </button>
+        <p v-if="dailyLoading" class="daily-loading">
+          <span class="daily-spinner" />正在生成日报，当日任务交由 AI 汇总中…
+        </p>
+
+        <div v-else-if="dailyError" class="daily-error">
+          <p class="daily-error-text">{{ dailyError }}</p>
+          <button class="btn btn-secondary btn-sm" @click="openDaily">重试</button>
+        </div>
+
+        <template v-else-if="dailyData">
+          <div class="daily-meta">
+            <span class="badge" :class="dailyData.source === 'ai' ? 'badge-coral daily-badge-ai' : ''">
+              {{ dailyData.source === 'ai' ? 'AI 生成' : '模板生成' }}
+            </span>
+            <span class="caption">基于 {{ dailyData.taskCount }} 项当日任务 · {{ dailyData.date }}</span>
+          </div>
+          <p class="daily-text">{{ dailyData.content }}</p>
+          <p v-if="dailyData.source === 'template'" class="daily-hint caption">
+            未配置 AI_API_KEY，当前为模板汇总；在 backend 的环境变量中配置后将由 AI 生成
+          </p>
+          <button class="btn btn-primary" @click="copyDaily">
+            {{ copyState === 'ok' ? '已复制 ✓' : '一键复制' }}
+          </button>
+        </template>
       </div>
     </AppModal>
   </div>
@@ -448,13 +487,64 @@ onMounted(load)
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--sp-lg);
+  gap: var(--sp-md);
+  padding: var(--sp-sm) 0;
+  text-align: center;
+}
+.daily-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
   padding: var(--sp-lg) 0;
 }
+.daily-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--hairline);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: daily-spin 0.8s linear infinite;
+}
+@keyframes daily-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.daily-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-md);
+  padding: var(--sp-md) 0;
+}
+.daily-error-text {
+  color: var(--error);
+  font-size: 14px;
+}
+.daily-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+}
+.daily-badge-ai {
+  font-size: 12px;
+}
 .daily-text {
-  font-family: var(--font-display);
-  font-size: 24px;
-  color: var(--ink);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--body-strong);
+  text-align: left;
+  white-space: pre-wrap;
+  background: var(--surface-soft);
+  border: 1px solid var(--hairline-soft);
+  border-radius: var(--r-md);
+  padding: var(--sp-md) var(--sp-lg);
+  width: 100%;
+}
+.daily-hint {
+  max-width: 100%;
 }
 
 @media (max-width: 700px) {

@@ -57,8 +57,15 @@ public class TaskService {
      * 当日任务（全部）
      */
     public List<Task> listToday() {
+        return listByDate(LocalDate.now());
+    }
+
+    /**
+     * 指定日期的任务（全部），供日报汇总使用
+     */
+    public List<Task> listByDate(LocalDate date) {
         return taskMapper.selectList(new LambdaQueryWrapper<Task>()
-                .eq(Task::getTaskDate, LocalDate.now())
+                .eq(Task::getTaskDate, date)
                 .orderByAsc(Task::getId));
     }
 }

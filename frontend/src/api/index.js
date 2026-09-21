@@ -53,3 +53,10 @@ export const newsApi = {
     return http.get('/news/hardware')
   }
 }
+
+// ---- 日报总结（AI 汇总，未配置 AI 时后端返回模板汇总）----
+export const dailySummaryApi = {
+  generate(date) {
+    return http.get('/daily-summary', { params: date ? { date } : {} })
+  }
+}
