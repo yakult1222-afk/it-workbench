@@ -100,9 +100,30 @@ mysql -uroot -proot123456 -h127.0.0.1 < backend/sql/init.sql
 ### 3. 启动后端（默认 8080 端口）
 
 ```bash
+./scripts/start-backend.sh        # 推荐：自动加载 backend/.env，然后 mvn spring-boot:run
+./scripts/start-backend.sh --check  # 只打印解析后的配置，不启动（排查配置问题用）
+```
+
+或手动启动：
+
+```bash
 cd backend
 mvn spring-boot:run
 ```
+
+### 环境变量配置（backend/.env）
+
+配置项全部支持环境变量注入，**不需要**改任何被提交的文件。首次使用：
+
+```bash
+cp backend/.env.example backend/.env   # 复制模板
+# 编辑 backend/.env 填入数据库密码、AI_API_KEY 等
+```
+
+- `backend/.env` 已被 `.gitignore` 排除，**不会提交到仓库**；`backend/.env.example` 是模板（无真实密钥），随仓库分发。
+- 加载优先级：**外部环境变量 > `backend/.env` > `application.yml` 默认值**。所以临时覆盖不用改文件：
+  `AI_API_KEY=sk-xxx ./scripts/start-backend.sh`
+- 不创建 `.env` 也能跑，全部走 `application.yml` 里的本地开发默认值。
 
 数据库连接可用环境变量覆盖：`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 默认值：`localhost:3306/it_workbench`，账号 `root` / `root123456`。
