@@ -71,6 +71,8 @@ public class DailySummaryService {
      * @return { date, taskCount, source: "ai" | "template", content }
      */
     public Map<String, Object> summarize(LocalDate date) {
+        // thsi is a test
+        String str = "test";
         List<Task> tasks = taskService.listByDate(date);
         String content;
         String source;
