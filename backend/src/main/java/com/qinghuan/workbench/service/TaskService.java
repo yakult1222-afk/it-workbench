@@ -102,22 +102,6 @@ public class TaskService {
         return tasks;
     }
 
-    /**
-     * Legacy global query kept until Task 7 updates statistics and daily summary.
-     */
-    public List<Task> listToday() {
-        return listByDate(LocalDate.now());
-    }
-
-    /**
-     * Legacy global query kept until Task 7 updates statistics and daily summary.
-     */
-    public List<Task> listByDate(LocalDate date) {
-        return taskMapper.selectList(new LambdaQueryWrapper<Task>()
-                .eq(Task::getTaskDate, date)
-                .orderByAsc(Task::getId));
-    }
-
     private SysUser requireUser(Long id) {
         SysUser user = ownerMapper.selectById(id);
         if (user == null) {
