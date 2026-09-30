@@ -1,11 +1,15 @@
 <script setup>
 import { onMounted, reactive, ref, computed } from 'vue'
-import { taskApi, dailySummaryApi } from '../api'
+import { taskApi, dailySummaryApi, userApi } from '../api'
+import { auth } from '../stores/auth'
 import TaskBadge from '../components/TaskBadge.vue'
 import AppModal from '../components/AppModal.vue'
 
 const TASK_TYPES = ['审批', '硬件问题', '软件问题', '网络问题']
 const STATUSES = ['完成', '未完成', '延期']
+const canViewAll = computed(() => auth.hasPermission('task:view:all'))
+const canManageAll = computed(() => auth.hasPermission('task:manage:all'))
+const owners = ref([])
 
 // ---- 列表与筛选 ----
 const list = ref([])
@@ -13,7 +17,7 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(10)
 const loading = ref(false)
-const filters = reactive({ taskDate: '', taskType: '', status: '' })
+const filters = reactive({ taskDate: '', taskType: '', status: '', ownerId: '' })
 
 async function load() {
   loading.value = true
@@ -23,7 +27,8 @@ async function load() {
       size: size.value,
       taskDate: filters.taskDate || undefined,
       taskType: filters.taskType || undefined,
-      status: filters.status || undefined
+      status: filters.status || undefined,
+      ownerId: canViewAll.value && filters.ownerId ? Number(filters.ownerId) : undefined
     }
     const data = await taskApi.page(params)
     list.value = data.records || []
@@ -44,6 +49,7 @@ function reset() {
   filters.taskDate = ''
   filters.taskType = ''
   filters.status = ''
+  filters.ownerId = ''
   search()
 }
 
@@ -71,7 +77,8 @@ const form = reactive({
   taskType: '',
   description: '',
   status: '未完成',
-  summary: ''
+  summary: '',
+  ownerId: ''
 })
 const formError = ref('')
 
@@ -82,6 +89,7 @@ function openCreate() {
   form.description = ''
   form.status = '未完成'
   form.summary = ''
+  form.ownerId = canManageAll.value ? auth.user.value?.id || '' : ''
   formError.value = ''
   editorOpen.value = true
 }
@@ -93,6 +101,7 @@ function openEdit(row) {
   form.description = row.description || ''
   form.status = row.status
   form.summary = row.summary || ''
+  form.ownerId = row.ownerId || ''
   formError.value = ''
   editorOpen.value = true
 }
@@ -104,6 +113,7 @@ async function save() {
   saving.value = true
   try {
     const payload = { ...form }
+    if (!canManageAll.value) delete payload.ownerId
     if (editingId.value) {
       await taskApi.update(editingId.value, payload)
     } else {
@@ -175,7 +185,19 @@ async function copyDaily() {
   }
 }
 
-onMounted(load)
+async function loadOwners() {
+  if (!canViewAll.value) return
+  try {
+    owners.value = await userApi.options()
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+onMounted(() => {
+  loadOwners()
+  load()
+})
 </script>
 
 <template>
@@ -212,6 +234,15 @@ onMounted(load)
           <option v-for="s in STATUSES" :key="s" :value="s">{{ s }}</option>
         </select>
       </div>
+      <div v-if="canViewAll" class="filter-item">
+        <label class="field-label">归属人</label>
+        <select v-model="filters.ownerId" class="select">
+          <option value="">全部归属人</option>
+          <option v-for="owner in owners" :key="owner.id" :value="owner.id">
+            {{ owner.displayName }}
+          </option>
+        </select>
+      </div>
       <div class="filter-actions">
         <button class="btn btn-primary" @click="search">查询</button>
         <button class="btn btn-secondary" @click="reset">重置</button>
@@ -228,16 +259,17 @@ onMounted(load)
               <th class="col-type">任务类型</th>
               <th class="col-desc">任务描述</th>
               <th class="col-status">任务状态</th>
+              <th class="col-owner">归属人</th>
               <th class="col-summary">任务总结</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading">
-              <td colspan="6" class="table-empty">加载中…</td>
+              <td colspan="7" class="table-empty">加载中…</td>
             </tr>
             <tr v-else-if="!list.length">
-              <td colspan="6" class="table-empty">暂无任务，点击右上角「新建任务」开始登记</td>
+              <td colspan="7" class="table-empty">暂无任务，点击右上角「新建任务」开始登记</td>
             </tr>
             <template v-else>
               <tr v-for="row in list" :key="row.id">
@@ -245,6 +277,7 @@ onMounted(load)
               <td class="col-type"><TaskBadge :type="row.taskType" /></td>
               <td class="col-desc body-sm">{{ row.description || '—' }}</td>
               <td class="col-status"><TaskBadge :status="row.status" /></td>
+              <td class="col-owner body-sm">{{ row.ownerName || '—' }}</td>
               <td class="col-summary body-sm summary-cell" :title="row.summary">{{ row.summary || '—' }}</td>
               <td class="col-actions">
                 <button class="btn btn-sm btn-secondary" @click="openEdit(row)">编辑</button>
@@ -289,6 +322,15 @@ onMounted(load)
               <option v-for="s in STATUSES" :key="s" :value="s">{{ s }}</option>
             </select>
           </div>
+          <div v-if="canManageAll" class="form-field">
+            <label class="field-label">归属人 <span class="req">*</span></label>
+            <select v-model="form.ownerId" class="select" required>
+              <option value="" disabled>请选择</option>
+              <option v-for="owner in owners" :key="owner.id" :value="owner.id">
+                {{ owner.displayName }}
+              </option>
+            </select>
+          </div>
         </div>
         <div class="form-field">
           <label class="field-label">任务描述</label>
@@ -310,7 +352,7 @@ onMounted(load)
     <AppModal :open="dailyOpen" title="日报总结" width="560px" @close="dailyOpen = false">
       <div class="daily-modal">
         <p v-if="dailyLoading" class="daily-loading">
-          <span class="daily-spinner" />正在生成日报，当日任务交由 AI 汇总中…
+          <span class="daily-spinner" />正在生成当前登录人今日任务的 AI 日报…
         </p>
 
         <div v-else-if="dailyError" class="daily-error">
@@ -323,7 +365,7 @@ onMounted(load)
             <span class="badge" :class="dailyData.source === 'ai' ? 'badge-coral daily-badge-ai' : ''">
               {{ dailyData.source === 'ai' ? 'AI 生成' : '模板生成' }}
             </span>
-            <span class="caption">基于 {{ dailyData.taskCount }} 项当日任务 · {{ dailyData.date }}</span>
+            <span class="caption">基于当前登录人 {{ dailyData.taskCount }} 项今日任务 · {{ dailyData.date }}</span>
           </div>
           <p class="daily-text">{{ dailyData.content }}</p>
           <p v-if="dailyData.source === 'template'" class="daily-hint caption">

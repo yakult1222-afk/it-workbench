@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, ref, computed } from 'vue'
 import { statsApi, newsApi } from '../api'
+import { auth } from '../stores/auth'
 import TaskBadge from '../components/TaskBadge.vue'
 
 const stats = ref(null)
@@ -17,6 +18,10 @@ const dateStr = today.toLocaleDateString('zh-CN', {
 })
 
 const rateInt = computed(() => (stats.value ? Math.round(stats.value.completionRate || 0) : 0))
+const scopeText = computed(() => {
+  if (!stats.value) return ''
+  return stats.value.scope === 'all' ? '全部人员' : '本人'
+})
 
 async function loadStats() {
   try {
@@ -51,6 +56,7 @@ onMounted(() => {
       <p class="caption-uppercase">Today · {{ dateStr }}</p>
       <h1 class="display-md">今日概览</h1>
       <p class="body-md head-sub">当日任务完成情况与 PC 硬件资讯</p>
+      <p v-if="scopeText" class="caption">当前统计范围：{{ scopeText }}</p>
     </section>
 
     <!-- 完成率 -->
