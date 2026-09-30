@@ -51,7 +51,7 @@ class DailySummaryServiceTest {
 
     private DailySummaryService service(String baseUrl, String apiKey) {
         TaskService taskService = Mockito.mock(TaskService.class);
-        when(taskService.listByDate(date)).thenReturn(sampleTasks());
+        when(taskService.listByDate(date, 7L)).thenReturn(sampleTasks());
         return new DailySummaryService(taskService, baseUrl, apiKey, "test-model", 5000);
     }
 
@@ -62,7 +62,7 @@ class DailySummaryServiceTest {
         server = stubServer(200, "{\"choices\":[{\"message\":{\"content\":\"今日共处理 4 项任务，两项已完成……\"}}]}");
         DailySummaryService svc = service("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key");
 
-        var result = svc.summarize(date);
+        var result = svc.summarize(date, 7L);
 
         assertEquals("ai", result.get("source"));
         assertEquals("今日共处理 4 项任务，两项已完成……", result.get("content"));
@@ -74,7 +74,7 @@ class DailySummaryServiceTest {
         server = stubServer(500, "{\"error\":\"boom\"}");
         DailySummaryService svc = service("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key");
 
-        var result = svc.summarize(date);
+        var result = svc.summarize(date, 7L);
 
         assertEquals("template", result.get("source"));
         assertTrue(((String) result.get("content")).contains("2026年9月21日"));
@@ -96,7 +96,7 @@ class DailySummaryServiceTest {
         server.start();
         DailySummaryService svc = service("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key");
 
-        svc.summarize(date);
+        svc.summarize(date, 7L);
 
         JsonNode body = mapper.readTree(captured.toString());
         assertEquals("test-model", body.path("model").asText());
@@ -115,7 +115,7 @@ class DailySummaryServiceTest {
     void 未配置apiKey时直接走模板() {
         DailySummaryService svc = service("https://api.deepseek.com/v1", "");
 
-        var result = svc.summarize(date);
+        var result = svc.summarize(date, 7L);
 
         assertEquals("template", result.get("source"));
         String content = (String) result.get("content");
@@ -129,14 +129,26 @@ class DailySummaryServiceTest {
     @Test
     void 无任务时模板给出空提示() {
         TaskService taskService = Mockito.mock(TaskService.class);
-        when(taskService.listByDate(date)).thenReturn(List.of());
+        when(taskService.listByDate(date, 7L)).thenReturn(List.of());
         DailySummaryService svc = new DailySummaryService(taskService, "https://api.deepseek.com/v1", "key", "m", 5000);
 
-        var result = svc.summarize(date);
+        var result = svc.summarize(date, 7L);
 
         assertEquals("template", result.get("source"));
         assertEquals(0, result.get("taskCount"));
         assertTrue(((String) result.get("content")).contains("未登记任何任务"));
+    }
+
+    @Test
+    void dailySummaryAlwaysUsesRequestedOwner() {
+        TaskService taskService = Mockito.mock(TaskService.class);
+        when(taskService.listByDate(date, 7L)).thenReturn(List.of());
+
+        DailySummaryService svc = new DailySummaryService(
+                taskService, "", "", "m", 5000);
+        svc.summarize(date, 7L);
+
+        Mockito.verify(taskService).listByDate(date, 7L);
     }
 
     @Test
