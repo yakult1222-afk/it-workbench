@@ -1,28 +1,91 @@
--- IT 工作台数据库初始化脚本
 CREATE DATABASE IF NOT EXISTS it_workbench
     DEFAULT CHARACTER SET utf8mb4
     COLLATE utf8mb4_unicode_ci;
-
 USE it_workbench;
 
-CREATE TABLE IF NOT EXISTS task (
-    id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
-    task_date   DATE         NOT NULL COMMENT '任务日期',
-    task_type   VARCHAR(20)  NOT NULL COMMENT '任务类型：审批/硬件问题/软件问题/网络问题',
-    description VARCHAR(1000)         DEFAULT NULL COMMENT '任务描述',
-    status      VARCHAR(20)  NOT NULL DEFAULT '未完成' COMMENT '任务状态：完成/未完成/延期',
-    summary     VARCHAR(2000)         DEFAULT NULL COMMENT '任务总结',
-    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+CREATE TABLE IF NOT EXISTS sys_role (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(50)  NOT NULL,
+    name        VARCHAR(50)  NOT NULL,
+    description VARCHAR(255) DEFAULT NULL,
+    built_in    TINYINT(1)   NOT NULL DEFAULT 0,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    KEY idx_task_date (task_date),
-    KEY idx_status (status)
-) ENGINE = InnoDB COMMENT = 'IT 工作台任务表';
+    UNIQUE KEY uk_sys_role_code (code)
+) ENGINE=InnoDB COMMENT='角色表';
 
--- 示例数据（可删除）
-INSERT INTO task (task_date, task_type, description, status, summary) VALUES
-    (CURDATE(), '硬件问题', '3 楼办公区打印机卡纸且无法进纸，需现场排查搓纸轮磨损情况', '完成', '更换搓纸轮组件，测试打印 50 页无卡纸'),
-    (CURDATE(), '软件问题', '财务部 ERP 客户端打不开报表模块，报缺少运行库', '完成', '安装对应运行库并更新客户端补丁，报表正常导出'),
-    (CURDATE(), '审批', '新员工入职账号开通审批（研发部 2 人）', '未完成', NULL),
-    (CURDATE(), '网络问题', '会议室 Wi-Fi 间歇性掉线，需检查 AP 固件与信道干扰', '延期', 'AP 固件升级需走变更窗口，已预约周六晚处理'),
-    (CURDATE(), '审批', '打印机采购审批流转至 IT 部门确认配置参数', '未完成', NULL);
+CREATE TABLE IF NOT EXISTS sys_permission (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(50)  NOT NULL,
+    name        VARCHAR(50)  NOT NULL,
+    description VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sys_permission_code (code)
+) ENGINE=InnoDB COMMENT='权限表';
+
+CREATE TABLE IF NOT EXISTS sys_user (
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    username      VARCHAR(50)  NOT NULL,
+    password_hash VARCHAR(100) NOT NULL,
+    display_name  VARCHAR(50)  NOT NULL,
+    role_id       BIGINT       NOT NULL,
+    enabled       TINYINT(1)   NOT NULL DEFAULT 1,
+    created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sys_user_username (username),
+    KEY idx_sys_user_role (role_id),
+    CONSTRAINT fk_sys_user_role FOREIGN KEY (role_id) REFERENCES sys_role(id)
+) ENGINE=InnoDB COMMENT='登录账号表';
+
+CREATE TABLE IF NOT EXISTS sys_role_permission (
+    role_id       BIGINT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    PRIMARY KEY (role_id, permission_id),
+    CONSTRAINT fk_role_permission_role FOREIGN KEY (role_id) REFERENCES sys_role(id) ON DELETE CASCADE,
+    CONSTRAINT fk_role_permission_permission FOREIGN KEY (permission_id) REFERENCES sys_permission(id) ON DELETE CASCADE
+) ENGINE=InnoDB COMMENT='角色权限关联表';
+
+CREATE TABLE IF NOT EXISTS task (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    owner_id    BIGINT       NOT NULL,
+    task_date   DATE         NOT NULL,
+    task_type   VARCHAR(20)  NOT NULL,
+    description VARCHAR(1000) DEFAULT NULL,
+    status      VARCHAR(20)  NOT NULL DEFAULT '未完成',
+    summary     VARCHAR(2000) DEFAULT NULL,
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    KEY idx_task_owner_date (owner_id, task_date),
+    KEY idx_task_owner_status (owner_id, status),
+    CONSTRAINT fk_task_owner FOREIGN KEY (owner_id) REFERENCES sys_user(id) ON DELETE RESTRICT
+) ENGINE=InnoDB COMMENT='IT 工作台任务表';
+
+INSERT INTO sys_permission (id, code, name, description) VALUES
+    (1, 'task:self:view',   '查看本人任务', '查看本人任务和个人统计'),
+    (2, 'task:self:manage', '管理本人任务', '新增、修改、删除本人任务'),
+    (3, 'task:view:all',    '查看全部任务', '查看所有账号的任务和统计'),
+    (4, 'task:manage:all',  '管理全部任务', '新增、修改、删除所有账号的任务'),
+    (5, 'user:manage',      '人员管理',     '管理登录账号'),
+    (6, 'role:manage',      '角色管理',     '管理角色与角色权限');
+
+INSERT INTO sys_role (id, code, name, description, built_in) VALUES
+    (1, 'SUPER_ADMIN', '超级管理员', '系统内置超级管理员', 1),
+    (2, 'USER',        '普通用户',   '系统内置普通用户',   1);
+
+INSERT INTO sys_role_permission (role_id, permission_id) VALUES
+    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (1, 6),
+    (2, 1), (2, 2);
+
+INSERT INTO sys_user (id, username, password_hash, display_name, role_id, enabled) VALUES
+    (1, 'qinghuan', '$2y$10$L1b.OgdolKEbVqXjsWOSoej4O0PIhWSKXx7CnlyaTPP66Fg8DC9MG', '清欢', 2, 1),
+    (2, 'admin',    '$2y$10$GPbRdlM/B2HrfNS/Ap4uv.TnEqeZyfTsdhJOHNscKeMEIBcFiRzS2', '超级管理员', 1, 1);
+
+INSERT INTO task (owner_id, task_date, task_type, description, status, summary) VALUES
+    (1, CURDATE(), '硬件问题', '3 楼办公区打印机卡纸且无法进纸，需现场排查搓纸轮磨损情况', '完成', '更换搓纸轮组件，测试打印 50 页无卡纸'),
+    (1, CURDATE(), '软件问题', '财务部 ERP 客户端打不开报表模块，报缺少运行库', '完成', '安装对应运行库并更新客户端补丁，报表正常导出'),
+    (1, CURDATE(), '审批', '新员工入职账号开通审批（研发部 2 人）', '未完成', NULL),
+    (1, CURDATE(), '网络问题', '会议室 Wi-Fi 间歇性掉线，需检查 AP 固件与信道干扰', '延期', 'AP 固件升级需走变更窗口，已预约周六晚处理'),
+    (1, CURDATE(), '审批', '打印机采购审批流转至 IT 部门确认配置参数', '未完成', NULL);

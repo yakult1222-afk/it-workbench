@@ -97,6 +97,16 @@ it-workbench/
 mysql -uroot -proot123456 -h127.0.0.1 < backend/sql/init.sql
 ```
 
+已有旧版本数据库需要升级到登录/RBAC 结构时，先备份再执行一次性迁移：
+
+```bash
+mysqldump -uroot -proot123456 -h127.0.0.1 it_workbench > /tmp/it-workbench-before-auth.sql
+mysql -uroot -proot123456 -h127.0.0.1 it_workbench < backend/sql/migrate-v2-login-rbac.sql
+./scripts/verify-auth-migration.sh
+```
+
+迁移会将全部旧任务归属到 `qinghuan` 账号，并创建系统角色、权限和初始化账号。
+
 ### 3. 启动后端（默认 8080 端口）
 
 ```bash
@@ -127,6 +137,17 @@ cp backend/.env.example backend/.env   # 复制模板
 
 数据库连接可用环境变量覆盖：`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 默认值：`localhost:3306/it_workbench`，账号 `root` / `root123456`。
+
+登录与权限相关环境变量：
+
+- `JWT_SECRET`：JWT 签名密钥，至少 32 字节；生产环境必须显式配置。
+- `JWT_EXPIRE_HOURS`：登录令牌有效期，默认 8 小时。
+- `CORS_ALLOWED_ORIGINS`：允许的前端来源，逗号分隔；本地默认包含 5173 和 8080。
+
+初始化账号（仅用于本地首次建库或迁移，非本地环境请立即更换密码）：
+
+- 普通用户：`qinghuan` / `Qinghuan@123456`，姓名“清欢”，旧任务全部归属该账号。
+- 超级管理员：`admin` / `Admin@123456`。
 
 ### 4. 启动前端（默认 5173 端口，`/api` 由 Vite 代理到 8080）
 
@@ -189,6 +210,9 @@ MySQL 首次启动自动执行 `backend/sql/init.sql`。访问 http://localhost:
 |---|---|---|
 | `workbench.news.sources` | IT之家、快科技、Tom's Hardware 的 RSS | 硬件资讯源，逗号分隔，按顺序尝试 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DB` / `MYSQL_USER` / `MYSQL_PASSWORD` | localhost / 3306 / it_workbench / root / root123456 | 数据库连接 |
+| `JWT_SECRET` | 本地开发默认值 | JWT 签名密钥，生产环境必须显式配置且至少 32 字节 |
+| `JWT_EXPIRE_HOURS` | `8` | JWT 登录态有效小时数 |
+| `CORS_ALLOWED_ORIGINS` | 本地 5173/8080 地址 | 允许跨域访问的来源，逗号分隔 |
 | `AI_BASE_URL`（即 `workbench.ai.base-url`） | `https://api.deepseek.com/v1` | AI 服务地址，任何 OpenAI 兼容接口均可（GLM / 通义 / OpenAI / 本地 Ollama 等） |
 | `AI_API_KEY`（即 `workbench.ai.api-key`） | 空 | AI 服务密钥；**留空则日报走模板汇总，不调用 AI** |
 | `AI_MODEL`（即 `workbench.ai.model`） | `deepseek-chat` | 模型名 |
