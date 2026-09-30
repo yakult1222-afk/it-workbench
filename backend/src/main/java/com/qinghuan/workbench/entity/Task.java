@@ -25,6 +25,13 @@ public class Task {
     @TableId(type = IdType.AUTO)
     private Long id;
 
+    /** 任务归属账号 */
+    private Long ownerId;
+
+    /** 归属人姓名，仅供接口展示 */
+    @TableField(exist = false)
+    private String ownerName;
+
     /** 任务日期 */
     @NotNull(message = "任务日期不能为空")
     private LocalDate taskDate;
