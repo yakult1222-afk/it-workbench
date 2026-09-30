@@ -7,7 +7,8 @@ const router = createRouter({
     { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
     { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
     { path: '/tasks', name: 'tasks', component: () => import('../views/TasksView.vue') },
-    { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { permission: 'user:manage' } }
+    { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { permission: 'user:manage' } },
+    { path: '/roles', name: 'roles', component: () => import('../views/RolesView.vue'), meta: { permission: 'role:manage' } }
   ]
 })
 

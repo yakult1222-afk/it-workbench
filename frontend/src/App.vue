@@ -34,6 +34,7 @@ async function logout() {
           <router-link to="/" class="nav-link" :class="{ active: activeName === 'home' }">首页</router-link>
           <router-link to="/tasks" class="nav-link" :class="{ active: activeName === 'tasks' }">任务列表</router-link>
           <router-link v-if="auth.hasPermission('user:manage')" to="/users" class="nav-link" :class="{ active: activeName === 'users' }">人员管理</router-link>
+          <router-link v-if="auth.hasPermission('role:manage')" to="/roles" class="nav-link" :class="{ active: activeName === 'roles' }">角色管理</router-link>
         </nav>
 
         <div class="account-box">
