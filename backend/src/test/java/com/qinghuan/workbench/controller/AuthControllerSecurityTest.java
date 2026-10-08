@@ -67,8 +67,12 @@ class AuthControllerSecurityTest {
     }
 
     @Test
-    void spaRouteIsNotProtectedByApiRule() throws Exception {
+    void spaRoutesAndAssetsAreNotProtectedByApiRule() throws Exception {
         mockMvc.perform(get("/login"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/tasks"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/assets/app.js"))
                 .andExpect(status().isOk());
     }
 }

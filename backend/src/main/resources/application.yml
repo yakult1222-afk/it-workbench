@@ -2,6 +2,8 @@ server:
   port: 8080
 
 spring:
+  profiles:
+    default: dev
   datasource:
     # 通过环境变量覆盖：MYSQL_HOST / MYSQL_PORT / MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:it_workbench}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
@@ -22,7 +24,7 @@ mybatis-plus:
 # 日报总结 AI 配置（OpenAI 兼容协议：DeepSeek / GLM / 通义 / OpenAI / Ollama 均可）
 workbench:
   jwt:
-    secret: ${JWT_SECRET:it-workbench-development-secret-key-32bytes}
+    secret: ${JWT_SECRET:}
     expire-hours: ${JWT_EXPIRE_HOURS:8}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}

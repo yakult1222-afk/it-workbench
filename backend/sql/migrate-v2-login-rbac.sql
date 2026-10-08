@@ -64,6 +64,8 @@ INSERT INTO sys_user (id, username, password_hash, display_name, role_id, enable
     (1, 'qinghuan', '$2y$10$L1b.OgdolKEbVqXjsWOSoej4O0PIhWSKXx7CnlyaTPP66Fg8DC9MG', '清欢', 2, 1),
     (2, 'admin',    '$2y$10$GPbRdlM/B2HrfNS/Ap4uv.TnEqeZyfTsdhJOHNscKeMEIBcFiRzS2', '超级管理员', 1, 1);
 
+SET @tasks_before = (SELECT COUNT(*) FROM task);
+
 ALTER TABLE task ADD COLUMN owner_id BIGINT NULL AFTER id;
 
 UPDATE task t
@@ -71,12 +73,42 @@ JOIN sys_user u ON u.username = 'qinghuan'
 SET t.owner_id = u.id
 WHERE t.owner_id IS NULL;
 
-SET @unowned = (SELECT COUNT(*) FROM task WHERE owner_id IS NULL);
-SELECT IF(@unowned = 0, 1,
-    CAST('task ownership migration guard failed' AS UNSIGNED));
+DROP PROCEDURE IF EXISTS migrate_task_ownership;
 
-ALTER TABLE task
-    MODIFY COLUMN owner_id BIGINT NOT NULL,
-    ADD KEY idx_task_owner_date (owner_id, task_date),
-    ADD KEY idx_task_owner_status (owner_id, status),
-    ADD CONSTRAINT fk_task_owner FOREIGN KEY (owner_id) REFERENCES sys_user(id) ON DELETE RESTRICT;
+DELIMITER //
+CREATE PROCEDURE migrate_task_ownership()
+BEGIN
+    DECLARE v_total BIGINT DEFAULT 0;
+    DECLARE v_unowned BIGINT DEFAULT 0;
+    DECLARE v_qinghuan_users BIGINT DEFAULT 0;
+    DECLARE v_qinghuan_tasks BIGINT DEFAULT 0;
+
+    SELECT COUNT(*) INTO v_total FROM task;
+    SELECT COUNT(*) INTO v_unowned FROM task WHERE owner_id IS NULL;
+    SELECT COUNT(*) INTO v_qinghuan_users
+      FROM sys_user WHERE username = 'qinghuan';
+    SELECT COUNT(*) INTO v_qinghuan_tasks
+      FROM task t
+      JOIN sys_user u ON u.id = t.owner_id
+     WHERE u.username = 'qinghuan';
+
+    IF v_qinghuan_users <> 1
+       OR v_total <> @tasks_before
+       OR v_unowned <> 0
+       OR v_qinghuan_tasks <> v_total THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'task ownership migration guard failed';
+    END IF;
+
+    ALTER TABLE task
+        MODIFY COLUMN owner_id BIGINT NOT NULL,
+        ADD KEY idx_task_owner_date (owner_id, task_date),
+        ADD KEY idx_task_owner_status (owner_id, status),
+        ADD CONSTRAINT fk_task_owner
+            FOREIGN KEY (owner_id) REFERENCES sys_user(id) ON DELETE RESTRICT;
+END//
+
+DELIMITER ;
+
+CALL migrate_task_ownership();
+DROP PROCEDURE IF EXISTS migrate_task_ownership;
