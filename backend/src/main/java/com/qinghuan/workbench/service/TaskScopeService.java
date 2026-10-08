@@ -48,7 +48,11 @@ public class TaskScopeService {
 
     public Task requireManageable(Long id, LoginUser user) {
         Task task = requireViewable(id, user);
-        if (!canManageAll(user) && !user.hasPermission("task:self:manage")) {
+        if (canManageAll(user)) {
+            return task;
+        }
+        boolean ownsTask = user.getId().equals(task.getOwnerId());
+        if (!user.hasPermission("task:self:manage") || !ownsTask) {
             throw new BusinessException(HttpStatus.FORBIDDEN, "无权限访问");
         }
         return task;

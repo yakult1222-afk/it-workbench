@@ -16,6 +16,7 @@ import com.qinghuan.workbench.mapper.SysUserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -60,6 +61,7 @@ public class RoleService {
         return toResponse(requireRole(id));
     }
 
+    @Transactional
     public RoleResponse create(RoleRequest request) {
         String code = request.code().trim();
         if (roleMapper.selectCount(new LambdaQueryWrapper<SysRole>()
@@ -79,6 +81,7 @@ public class RoleService {
         return buildResponse(role, permissionIds);
     }
 
+    @Transactional
     public RoleResponse update(Long id, RoleRequest request) {
         SysRole role = requireRole(id);
         String requestedCode = request.code().trim();
@@ -105,6 +108,7 @@ public class RoleService {
         return buildResponse(role, permissionIds);
     }
 
+    @Transactional
     public void delete(Long id) {
         SysRole role = requireRole(id);
         if ("SUPER_ADMIN".equals(role.getCode())) {

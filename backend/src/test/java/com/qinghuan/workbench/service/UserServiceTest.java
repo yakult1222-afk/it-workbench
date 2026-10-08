@@ -12,6 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -61,10 +63,24 @@ class UserServiceTest {
         SysUser target = user(2L, "admin", 1L, true);
         when(userMapper.selectById(2L)).thenReturn(target);
         when(roleMapper.selectById(1L)).thenReturn(superRole());
-        when(userMapper.selectCount(any())).thenReturn(1L);
+        when(userMapper.selectList(any())).thenReturn(List.of(target));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.changeStatus(2L, false, 99L));
+
+        assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+        assertEquals("至少保留一个可用的超级管理员", ex.getMessage());
+    }
+
+    @Test
+    void updateCannotDisableLastEnabledSuperAdminWithSameRole() {
+        SysUser target = user(2L, "admin", 1L, true);
+        when(userMapper.selectById(2L)).thenReturn(target);
+        when(roleMapper.selectById(1L)).thenReturn(superRole());
+        when(userMapper.selectList(any())).thenReturn(List.of(target));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.update(2L, new UserUpdateRequest("超级管理员", 1L, false), 99L));
 
         assertEquals(HttpStatus.CONFLICT, ex.getStatus());
         assertEquals("至少保留一个可用的超级管理员", ex.getMessage());
@@ -89,7 +105,7 @@ class UserServiceTest {
         when(userMapper.selectById(2L)).thenReturn(target);
         when(roleMapper.selectById(1L)).thenReturn(superRole());
         when(roleMapper.selectById(2L)).thenReturn(userRole());
-        when(userMapper.selectCount(any())).thenReturn(1L);
+        when(userMapper.selectList(any())).thenReturn(List.of(target));
 
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.update(2L, new UserUpdateRequest("超级管理员", 2L, true), 99L));

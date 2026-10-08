@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
@@ -66,19 +67,21 @@ public class UserService {
         return UserPageItem.from(user, role);
     }
 
+    @Transactional
     public void update(Long id, UserUpdateRequest request, Long operatorId) {
         SysUser target = requireUser(id);
         SysRole oldRole = requireRole(target.getRoleId());
         SysRole newRole = requireRole(request.roleId());
-        boolean removingLastSuperAdmin = isSuperAdmin(oldRole)
-                && !"SUPER_ADMIN".equals(newRole.getCode())
+        boolean losingEnabledSuperAdmin = isSuperAdmin(oldRole)
                 && Boolean.TRUE.equals(target.getEnabled())
+                && (!"SUPER_ADMIN".equals(newRole.getCode()) || !request.enabled());
+        if (id.equals(operatorId) && !request.enabled()) {
+            throw new BusinessException(HttpStatus.CONFLICT, "不能禁用当前登录账号");
+        }
+        boolean removingLastSuperAdmin = losingEnabledSuperAdmin
                 && countEnabledSuperAdmins(oldRole.getId()) <= 1;
         if (removingLastSuperAdmin) {
             throw new BusinessException(HttpStatus.CONFLICT, "至少保留一个可用的超级管理员");
-        }
-        if (id.equals(operatorId) && !request.enabled()) {
-            throw new BusinessException(HttpStatus.CONFLICT, "不能禁用当前登录账号");
         }
         target.setDisplayName(request.displayName().trim());
         target.setRoleId(newRole.getId());
@@ -86,6 +89,7 @@ public class UserService {
         userMapper.updateById(target);
     }
 
+    @Transactional
     public void changeStatus(Long id, boolean enabled, Long operatorId) {
         SysUser target = requireUser(id);
         if (!enabled && id.equals(operatorId)) {
@@ -137,9 +141,11 @@ public class UserService {
     }
 
     private long countEnabledSuperAdmins(Long roleId) {
-        return userMapper.selectCount(new LambdaQueryWrapper<SysUser>()
-                .eq(SysUser::getRoleId, roleId)
-                .eq(SysUser::getEnabled, true));
+        return userMapper.selectList(new LambdaQueryWrapper<SysUser>()
+                        .eq(SysUser::getRoleId, roleId)
+                        .eq(SysUser::getEnabled, true)
+                        .last("FOR UPDATE"))
+                .size();
     }
 
     private void validatePasswordNotUsername(String password, String username) {

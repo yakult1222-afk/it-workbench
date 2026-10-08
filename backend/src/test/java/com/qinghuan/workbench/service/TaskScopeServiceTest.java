@@ -59,6 +59,18 @@ class TaskScopeServiceTest {
     }
 
     @Test
+    void viewAllSelfManageCannotManageAnotherOwnersTask() {
+        Task otherTask = task(3L, 99L);
+        when(taskMapper.selectById(3L)).thenReturn(otherTask);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> scopeService.requireManageable(
+                        3L, loginUser(7L, "task:view:all", "task:self:manage")));
+
+        assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
     void normalUserCannotLoadAnotherUsersTask() {
         Task otherTask = task(3L, 99L);
         when(taskMapper.selectById(3L)).thenReturn(otherTask);

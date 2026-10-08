@@ -11,11 +11,13 @@ import com.qinghuan.workbench.mapper.SysUserMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -35,6 +37,16 @@ class RoleServiceTest {
         rolePermissionMapper = mock(SysRolePermissionMapper.class);
         userMapper = mock(SysUserMapper.class);
         service = new RoleService(roleMapper, permissionMapper, rolePermissionMapper, userMapper);
+    }
+
+    @Test
+    void roleMutationsAreTransactional() throws Exception {
+        assertTrue(RoleService.class.getMethod("create", RoleRequest.class)
+                .isAnnotationPresent(Transactional.class));
+        assertTrue(RoleService.class.getMethod("update", Long.class, RoleRequest.class)
+                .isAnnotationPresent(Transactional.class));
+        assertTrue(RoleService.class.getMethod("delete", Long.class)
+                .isAnnotationPresent(Transactional.class));
     }
 
     @Test
