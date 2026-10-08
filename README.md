@@ -144,11 +144,6 @@ cp backend/.env.example backend/.env   # 复制模板
 - `JWT_EXPIRE_HOURS`：登录令牌有效期，默认 8 小时。
 - `CORS_ALLOWED_ORIGINS`：允许的前端来源，逗号分隔；本地默认包含 5173 和 8080。
 
-初始化账号（仅用于本地首次建库或迁移，非本地环境请立即更换密码）：
-
-- 普通用户：`qinghuan` / `Qinghuan@123456`，姓名“清欢”，旧任务全部归属该账号。
-- 超级管理员：`admin` / `Admin@123456`。
-
 ### 4. 启动前端（默认 5173 端口，`/api` 由 Vite 代理到 8080）
 
 ```bash
@@ -158,6 +153,39 @@ npm run dev
 ```
 
 访问 http://localhost:5173
+
+## 登录与权限
+
+系统使用用户名密码登录，登录态为 8 小时有效的 JWT。登录后：
+
+- 普通用户只能查看和管理自己的任务，日报只汇总当前登录人当天任务。
+- 拥有“查看全部任务”权限的角色可以查看全部任务，并按归属人筛选。
+- 拥有人员管理或角色管理权限的账号可以配置账号和角色权限。
+- 一个账号只能绑定一个角色，一个角色可以配置多个权限。
+- 超级管理员角色拥有全部权限，不能删除或移除权限。
+
+初始化账号仅供本地首次建库或迁移使用：
+
+- 普通用户：`qinghuan` / `Qinghuan@123456`，姓名“清欢”，旧任务全部归属该账号。
+- 超级管理员：`admin` / `Admin@123456`。
+
+非本地环境必须修改初始密码，并显式配置 `JWT_SECRET`。登录、JWT 和 CORS 配置可以通过 `backend/.env` 或环境变量覆盖。
+
+权限编码：
+
+- `task:self:view`
+- `task:self:manage`
+- `task:view:all`
+- `task:manage:all`
+- `user:manage`
+- `role:manage`
+
+数据库迁移完成后可以运行：
+
+```bash
+./scripts/verify-auth-migration.sh
+./scripts/verify-auth-api.sh
+```
 
 ## 一体化打包（单端口运行）
 
