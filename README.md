@@ -97,6 +97,16 @@ it-workbench/
 mysql -uroot -proot123456 -h127.0.0.1 < backend/sql/init.sql
 ```
 
+已有旧版本数据库需要升级到登录/RBAC 结构时，先备份再执行一次性迁移：
+
+```bash
+mysqldump -uroot -proot123456 -h127.0.0.1 it_workbench > /tmp/it-workbench-before-auth.sql
+mysql -uroot -proot123456 -h127.0.0.1 it_workbench < backend/sql/migrate-v2-login-rbac.sql
+./scripts/verify-auth-migration.sh
+```
+
+迁移会将全部旧任务归属到 `qinghuan` 账号，并创建系统角色、权限和初始化账号。
+
 ### 3. 启动后端（默认 8080 端口）
 
 ```bash
@@ -128,6 +138,12 @@ cp backend/.env.example backend/.env   # 复制模板
 数据库连接可用环境变量覆盖：`MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、`MYSQL_PASSWORD`。
 默认值：`localhost:3306/it_workbench`，账号 `root` / `root123456`。
 
+登录与权限相关环境变量：
+
+- `JWT_SECRET`：JWT 签名密钥，至少 32 字节；生产环境必须显式配置。
+- `JWT_EXPIRE_HOURS`：登录令牌有效期，默认 8 小时。
+- `CORS_ALLOWED_ORIGINS`：允许的前端来源，逗号分隔；本地默认包含 5173 和 8080。
+
 ### 4. 启动前端（默认 5173 端口，`/api` 由 Vite 代理到 8080）
 
 ```bash
@@ -137,6 +153,39 @@ npm run dev
 ```
 
 访问 http://localhost:5173
+
+## 登录与权限
+
+系统使用用户名密码登录，登录态为 8 小时有效的 JWT。登录后：
+
+- 普通用户只能查看和管理自己的任务，日报只汇总当前登录人当天任务。
+- 拥有“查看全部任务”权限的角色可以查看全部任务，并按归属人筛选。
+- 拥有人员管理或角色管理权限的账号可以配置账号和角色权限。
+- 一个账号只能绑定一个角色，一个角色可以配置多个权限。
+- 超级管理员角色拥有全部权限，不能删除或移除权限。
+
+初始化账号仅供本地首次建库或迁移使用：
+
+- 普通用户：`qinghuan` / `Qinghuan@123456`，姓名“清欢”，旧任务全部归属该账号。
+- 超级管理员：`admin` / `Admin@123456`。
+
+非本地环境必须修改初始密码，并显式配置 `JWT_SECRET`。登录、JWT 和 CORS 配置可以通过 `backend/.env` 或环境变量覆盖。
+
+权限编码：
+
+- `task:self:view`
+- `task:self:manage`
+- `task:view:all`
+- `task:manage:all`
+- `user:manage`
+- `role:manage`
+
+数据库迁移完成后可以运行：
+
+```bash
+./scripts/verify-auth-migration.sh
+./scripts/verify-auth-api.sh
+```
 
 ## 一体化打包（单端口运行）
 
@@ -189,6 +238,9 @@ MySQL 首次启动自动执行 `backend/sql/init.sql`。访问 http://localhost:
 |---|---|---|
 | `workbench.news.sources` | IT之家、快科技、Tom's Hardware 的 RSS | 硬件资讯源，逗号分隔，按顺序尝试 |
 | `MYSQL_HOST` / `MYSQL_PORT` / `MYSQL_DB` / `MYSQL_USER` / `MYSQL_PASSWORD` | localhost / 3306 / it_workbench / root / root123456 | 数据库连接 |
+| `JWT_SECRET` | 本地开发默认值 | JWT 签名密钥，生产环境必须显式配置且至少 32 字节 |
+| `JWT_EXPIRE_HOURS` | `8` | JWT 登录态有效小时数 |
+| `CORS_ALLOWED_ORIGINS` | 本地 5173/8080 地址 | 允许跨域访问的来源，逗号分隔 |
 | `AI_BASE_URL`（即 `workbench.ai.base-url`） | `https://api.deepseek.com/v1` | AI 服务地址，任何 OpenAI 兼容接口均可（GLM / 通义 / OpenAI / 本地 Ollama 等） |
 | `AI_API_KEY`（即 `workbench.ai.api-key`） | 空 | AI 服务密钥；**留空则日报走模板汇总，不调用 AI** |
 | `AI_MODEL`（即 `workbench.ai.model`） | `deepseek-chat` | 模型名 |

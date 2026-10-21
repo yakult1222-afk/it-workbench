@@ -70,10 +70,8 @@ public class DailySummaryService {
      *
      * @return { date, taskCount, source: "ai" | "template", content }
      */
-    public Map<String, Object> summarize(LocalDate date) {
-        // thsi is a test
-        String str = "test";
-        List<Task> tasks = taskService.listByDate(date);
+    public Map<String, Object> summarize(LocalDate date, Long ownerId) {
+        List<Task> tasks = taskService.listByDate(date, ownerId);
         String content;
         String source;
         if (aiEnabled() && !tasks.isEmpty()) {
@@ -91,6 +89,7 @@ public class DailySummaryService {
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("date", date.toString());
+        result.put("ownerId", ownerId);
         result.put("taskCount", tasks.size());
         result.put("source", source);
         result.put("content", content);

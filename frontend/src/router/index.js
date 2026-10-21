@@ -1,13 +1,30 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
-import TasksView from '../views/TasksView.vue'
+import { auth } from '../stores/auth'
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', name: 'home', component: HomeView },
-    { path: '/tasks', name: 'tasks', component: TasksView }
+    { path: '/login', name: 'login', component: () => import('../views/LoginView.vue'), meta: { public: true } },
+    { path: '/', name: 'home', component: () => import('../views/HomeView.vue') },
+    { path: '/tasks', name: 'tasks', component: () => import('../views/TasksView.vue') },
+    { path: '/users', name: 'users', component: () => import('../views/UsersView.vue'), meta: { permission: 'user:manage' } },
+    { path: '/roles', name: 'roles', component: () => import('../views/RolesView.vue'), meta: { permission: 'role:manage' } }
   ]
+})
+
+router.beforeEach((to) => {
+  if (to.meta.public) {
+    return auth.isLoggedIn.value && to.name === 'login'
+      ? { name: 'home' }
+      : true
+  }
+  if (!auth.isLoggedIn.value) {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  if (to.meta.permission && !auth.hasPermission(to.meta.permission)) {
+    return { name: 'home' }
+  }
+  return true
 })
 
 export default router

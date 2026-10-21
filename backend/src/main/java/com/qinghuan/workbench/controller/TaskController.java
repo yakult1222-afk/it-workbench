@@ -3,9 +3,12 @@ package com.qinghuan.workbench.controller;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.qinghuan.workbench.common.Result;
 import com.qinghuan.workbench.entity.Task;
+import com.qinghuan.workbench.security.CurrentUserService;
 import com.qinghuan.workbench.service.TaskService;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -18,58 +21,50 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 
-/**
- * 任务 CRUD 接口
- */
 @RestController
 @RequestMapping("/api/tasks")
+@RequiredArgsConstructor
 public class TaskController {
-
     private final TaskService taskService;
+    private final CurrentUserService currentUserService;
 
-    public TaskController(TaskService taskService) {
-        this.taskService = taskService;
-    }
-
-    /** 分页列表：可按日期/类型/状态过滤 */
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('task:self:view','task:view:all')")
     public Result<IPage<Task>> page(
             @RequestParam(defaultValue = "1") long page,
             @RequestParam(defaultValue = "10") long size,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate taskDate,
             @RequestParam(required = false) String taskType,
-            @RequestParam(required = false) String status) {
-        return Result.ok(taskService.page(page, size, taskDate, taskType, status));
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long ownerId) {
+        return Result.ok(taskService.page(page, size, taskDate, taskType, status, ownerId,
+                currentUserService.require()));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('task:self:view','task:view:all')")
     public Result<Task> getById(@PathVariable Long id) {
-        Task task = taskService.getById(id);
-        if (task == null) {
-            return Result.error("任务不存在");
-        }
-        return Result.ok(task);
+        return Result.ok(taskService.getById(id, currentUserService.require()));
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyAuthority('task:self:manage','task:manage:all')")
     public Result<Task> create(@Valid @RequestBody Task task) {
-        return Result.ok(taskService.create(task));
+        return Result.ok(taskService.create(task, currentUserService.require()));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('task:self:manage','task:manage:all')")
     public Result<Void> update(@PathVariable Long id, @Valid @RequestBody Task task) {
         task.setId(id);
-        if (!taskService.update(task)) {
-            return Result.error("任务不存在");
-        }
+        taskService.update(task, currentUserService.require());
         return Result.ok();
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyAuthority('task:self:manage','task:manage:all')")
     public Result<Void> delete(@PathVariable Long id) {
-        if (!taskService.delete(id)) {
-            return Result.error("任务不存在");
-        }
+        taskService.delete(id, currentUserService.require());
         return Result.ok();
     }
 }

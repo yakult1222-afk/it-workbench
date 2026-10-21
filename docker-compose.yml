@@ -26,6 +26,8 @@ services:
     container_name: it-workbench-backend
     restart: unless-stopped
     environment:
+      SPRING_PROFILES_ACTIVE: prod
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DB: it_workbench
