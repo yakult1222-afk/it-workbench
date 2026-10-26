@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 
 class DailySummaryCacheServiceTest {
     private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    @SuppressWarnings("unchecked")
     private final ValueOperations<String, String> values = mock(ValueOperations.class);
     private final DailySummaryCacheService service =
             new DailySummaryCacheService(redis, new com.fasterxml.jackson.databind.ObjectMapper(), 1800);
