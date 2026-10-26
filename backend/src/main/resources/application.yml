@@ -13,6 +13,12 @@ spring:
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT_MS:2000}ms
 
 mybatis-plus:
   configuration:
@@ -28,6 +34,8 @@ workbench:
     expire-hours: ${JWT_EXPIRE_HOURS:8}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
+  daily-summary:
+    cache-ttl-seconds: ${AI_SUMMARY_CACHE_TTL_SECONDS:1800}
   ai:
     base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
     api-key: ${AI_API_KEY:}      # 留空 = 不调 AI，日报走模板汇总
