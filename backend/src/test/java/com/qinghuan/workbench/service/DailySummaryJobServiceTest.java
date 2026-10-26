@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -93,6 +94,20 @@ class DailySummaryJobServiceTest {
         assertEquals("QUEUED", result.status());
         verify(mapper).updateById(argThat(job ->
                 "QUEUED".equals(job.getStatus()) && job.getAttemptCount() == 0));
+    }
+
+    @Test
+    void claimNextMarksRunningWithLease() {
+        AiSummaryJob due = job(31L, 7L, date, "hash", "QUEUED");
+        when(mapper.selectClaimable(any())).thenReturn(due);
+        LocalDateTime before = LocalDateTime.now();
+
+        AiSummaryJob claimed = service.claimNext();
+
+        assertEquals("RUNNING", claimed.getStatus());
+        assertEquals(1, claimed.getAttemptCount());
+        verify(mapper).markRunning(any(), argThat(lease ->
+                lease.isAfter(before.plusSeconds(110))), any());
     }
 
     private static AiSummaryJob job(Long id, Long ownerId, LocalDate date,

@@ -36,6 +36,13 @@ workbench:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
   daily-summary:
     cache-ttl-seconds: ${AI_SUMMARY_CACHE_TTL_SECONDS:1800}
+    worker:
+      enabled: ${AI_SUMMARY_WORKER_ENABLED:true}
+      poll-interval-ms: ${AI_SUMMARY_POLL_INTERVAL_MS:1000}
+      concurrency: ${AI_SUMMARY_CONCURRENCY:2}
+      lease-seconds: ${AI_SUMMARY_LEASE_SECONDS:120}
+      max-attempts: ${AI_SUMMARY_MAX_ATTEMPTS:3}
+      retry-delays-seconds: ${AI_SUMMARY_RETRY_DELAYS_SECONDS:5,20,60}
   ai:
     base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
     api-key: ${AI_API_KEY:}      # 留空 = 不调 AI，日报走模板汇总
