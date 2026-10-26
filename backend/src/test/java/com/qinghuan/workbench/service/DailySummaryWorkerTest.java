@@ -21,6 +21,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("unchecked")
 class DailySummaryWorkerTest {
     private final LocalDate date = LocalDate.of(2026, 10, 26);
     private DailySummaryJobService jobService;
