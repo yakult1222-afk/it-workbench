@@ -182,7 +182,7 @@ async function openDaily() {
     let supersededRetries = 0
     while (true) {
       let job = await dailySummaryApi.create()
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || runToken !== dailyRunToken) {
         throw Object.assign(new Error('已停止等待日报'), {
           code: 'DAILY_SUMMARY_POLL_ABORTED'
         })
@@ -197,10 +197,17 @@ async function openDaily() {
           jobId: job.jobId,
           load: dailySummaryApi.status,
           onUpdate: (update) => {
-            dailyStatus.value = update.status
+            if (!controller.signal.aborted && runToken === dailyRunToken) {
+              dailyStatus.value = update.status
+            }
           },
           signal: controller.signal
         })
+        if (controller.signal.aborted || runToken !== dailyRunToken) {
+          throw Object.assign(new Error('已停止等待日报'), {
+            code: 'DAILY_SUMMARY_POLL_ABORTED'
+          })
+        }
         dailyStatus.value = job.status
       }
       if (job.status === 'SUPERSEDED' && supersededRetries < 1) {
@@ -226,6 +233,7 @@ async function openDaily() {
 
 function closeDaily() {
   dailyOpen.value = false
+  dailyLoading.value = false
   stopDailyPolling()
 }
 

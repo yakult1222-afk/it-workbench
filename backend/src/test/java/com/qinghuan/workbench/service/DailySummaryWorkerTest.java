@@ -1,6 +1,5 @@
 package com.qinghuan.workbench.service;
 
-import com.qinghuan.workbench.common.BusinessException;
 import com.qinghuan.workbench.dto.summary.DailySummaryJobView;
 import com.qinghuan.workbench.entity.AiSummaryJob;
 import com.qinghuan.workbench.entity.Task;
@@ -9,7 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -155,6 +157,22 @@ class DailySummaryWorkerTest {
         worker.runOne();
 
         verify(jobService).fail(eq(job), any(IllegalStateException.class));
+    }
+
+    @Test
+    void pollDispatchesClaimedJobToConfiguredExecutor() {
+        AtomicReference<Runnable> dispatched = new AtomicReference<>();
+        Executor executor = dispatched::set;
+        DailySummaryWorker asyncWorker = new DailySummaryWorker(
+                jobService, taskService, fingerprint, summaryService, cache,
+                executor, true, 2, 3, "5,20,60");
+        AiSummaryJob job = runningJob("hash", 1);
+        when(jobService.claimNext()).thenReturn(job);
+
+        asyncWorker.poll();
+
+        assertNotNull(dispatched.get());
+        verify(jobService, never()).complete(any(), anyString(), anyString(), anyString());
     }
 
     private AiSummaryJob runningJob(String hash, int attempt) {

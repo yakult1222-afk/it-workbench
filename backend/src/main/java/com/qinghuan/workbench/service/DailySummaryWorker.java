@@ -45,7 +45,7 @@ public class DailySummaryWorker {
             @Value("${workbench.daily-summary.worker.retry-delays-seconds:5,20,60}")
             String retryDelays) {
         this(jobService, taskService, fingerprintService, summaryService, cacheService,
-                maxAttempts, parseDelays(retryDelays), enabled, Runnable::run,
+                maxAttempts, parseDelays(retryDelays), enabled, executor,
                 new Semaphore(Math.max(1, concurrency)));
     }
 
