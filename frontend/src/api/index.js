@@ -54,7 +54,12 @@ export const newsApi = {
 }
 
 export const dailySummaryApi = {
-  generate(date) { return http.get('/daily-summary', { params: date ? { date } : {} }) }
+  create(date) {
+    return http.post('/daily-summary/jobs', null, { params: date ? { date } : {} })
+  },
+  status(jobId) {
+    return http.get(`/daily-summary/jobs/${jobId}`)
+  }
 }
 
 export const userApi = {

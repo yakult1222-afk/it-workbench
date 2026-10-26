@@ -1,6 +1,7 @@
 <script setup>
-import { onMounted, reactive, ref, computed } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, computed } from 'vue'
 import { taskApi, dailySummaryApi, userApi } from '../api'
+import { dailySummaryStageCopy, pollDailySummary } from '../api/dailySummaryPolling'
 import { auth } from '../stores/auth'
 import TaskBadge from '../components/TaskBadge.vue'
 import AppModal from '../components/AppModal.vue'
@@ -142,21 +143,99 @@ async function remove(row) {
 const dailyOpen = ref(false)
 const dailyLoading = ref(false)
 const dailyError = ref('')
-const dailyData = ref(null) // { date, taskCount, source: 'ai' | 'template', content }
+const dailyData = ref(null)
+const dailyStatus = ref('')
+const dailyElapsed = ref(0)
 const copyState = ref('') // '' | 'ok'
+let dailyPollController = null
+let dailyClock = null
+let dailyRunToken = 0
+
+const dailyWaitCopy = computed(() => dailySummaryStageCopy(dailyStatus.value, dailyElapsed.value))
+const dailyWaitHint = computed(() => {
+  if (dailyStatus.value === 'RETRYING') {
+    return '当前任务记录已经保留，稍后会继续整理。'
+  }
+  if (dailyElapsed.value >= 45000) {
+    return '后台任务仍在继续，关闭弹窗不会中断。'
+  }
+  return '日报只基于你今天的任务记录生成。'
+})
 
 async function openDaily() {
+  stopDailyPolling()
   dailyOpen.value = true
   dailyLoading.value = true
   dailyError.value = ''
   dailyData.value = null
+  dailyStatus.value = 'QUEUED'
+  dailyElapsed.value = 0
   copyState.value = ''
+  const startedAt = Date.now()
+  const runToken = ++dailyRunToken
+  const controller = new AbortController()
+  dailyPollController = controller
+  dailyClock = setInterval(() => {
+    dailyElapsed.value = Date.now() - startedAt
+  }, 1000)
   try {
-    dailyData.value = await dailySummaryApi.generate()
+    let supersededRetries = 0
+    while (true) {
+      let job = await dailySummaryApi.create()
+      if (controller.signal.aborted) {
+        throw Object.assign(new Error('已停止等待日报'), {
+          code: 'DAILY_SUMMARY_POLL_ABORTED'
+        })
+      }
+      dailyStatus.value = job.status
+      if (job.status === 'SUPERSEDED' && supersededRetries < 1) {
+        supersededRetries++
+        continue
+      }
+      if (!['SUCCEEDED', 'DEGRADED', 'FAILED', 'SUPERSEDED'].includes(job.status)) {
+        job = await pollDailySummary({
+          jobId: job.jobId,
+          load: dailySummaryApi.status,
+          onUpdate: (update) => {
+            dailyStatus.value = update.status
+          },
+          signal: controller.signal
+        })
+        dailyStatus.value = job.status
+      }
+      if (job.status === 'SUPERSEDED' && supersededRetries < 1) {
+        supersededRetries++
+        continue
+      }
+      if (job.status === 'FAILED' || job.status === 'SUPERSEDED') {
+        throw new Error(job.errorMessage || '日报生成失败，请稍后重试')
+      }
+      dailyData.value = job
+      break
+    }
   } catch (e) {
+    if (e.code === 'DAILY_SUMMARY_POLL_ABORTED' || runToken !== dailyRunToken) return
     dailyError.value = e.message || '日报生成失败'
   } finally {
-    dailyLoading.value = false
+    if (runToken === dailyRunToken) {
+      if (!controller.signal.aborted) stopDailyPolling()
+      dailyLoading.value = false
+    }
+  }
+}
+
+function closeDaily() {
+  dailyOpen.value = false
+  stopDailyPolling()
+}
+
+function stopDailyPolling() {
+  dailyRunToken++
+  dailyPollController?.abort()
+  dailyPollController = null
+  if (dailyClock) {
+    clearInterval(dailyClock)
+    dailyClock = null
   }
 }
 
@@ -198,6 +277,8 @@ onMounted(() => {
   loadOwners()
   load()
 })
+
+onBeforeUnmount(stopDailyPolling)
 </script>
 
 <template>
@@ -349,11 +430,24 @@ onMounted(() => {
     </AppModal>
 
     <!-- 日报总结弹窗（AI 汇总） -->
-    <AppModal :open="dailyOpen" title="日报总结" width="560px" @close="dailyOpen = false">
+    <AppModal :open="dailyOpen" title="日报总结" width="560px" @close="closeDaily">
       <div class="daily-modal">
-        <p v-if="dailyLoading" class="daily-loading">
-          <span class="daily-spinner" />正在生成当前登录人今日任务的 AI 日报…
-        </p>
+        <div v-if="dailyLoading" class="daily-drafting" role="status" aria-live="polite">
+          <div class="daily-draft-sheet" aria-hidden="true">
+            <span class="daily-draft-line daily-draft-line-1" />
+            <span class="daily-draft-line daily-draft-line-2" />
+            <span class="daily-draft-line daily-draft-line-3" />
+          </div>
+          <div class="daily-wait-copy">
+            <p class="daily-wait-title">{{ dailyWaitCopy }}</p>
+            <p class="daily-wait-hint">{{ dailyWaitHint }}</p>
+          </div>
+          <div class="daily-wait-dots" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
 
         <div v-else-if="dailyError" class="daily-error">
           <p class="daily-error-text">{{ dailyError }}</p>
@@ -363,12 +457,21 @@ onMounted(() => {
         <template v-else-if="dailyData">
           <div class="daily-meta">
             <span class="badge" :class="dailyData.source === 'ai' ? 'badge-coral daily-badge-ai' : ''">
-              {{ dailyData.source === 'ai' ? 'AI 生成' : '模板生成' }}
+              {{
+                dailyData.status === 'DEGRADED'
+                  ? 'AI 降级 · 模板生成'
+                  : dailyData.source === 'ai'
+                    ? 'AI 生成'
+                    : '模板生成'
+              }}
             </span>
             <span class="caption">基于当前登录人 {{ dailyData.taskCount }} 项今日任务 · {{ dailyData.date }}</span>
           </div>
           <p class="daily-text">{{ dailyData.content }}</p>
-          <p v-if="dailyData.source === 'template'" class="daily-hint caption">
+          <p v-if="dailyData.status === 'DEGRADED'" class="daily-hint caption">
+            AI 服务暂时繁忙，已切换为模板汇总；内容仍基于你今天的任务记录。
+          </p>
+          <p v-else-if="dailyData.source === 'template'" class="daily-hint caption">
             未配置 AI_API_KEY，当前为模板汇总；在 backend 的环境变量中配置后将由 AI 生成
           </p>
           <button class="btn btn-primary" @click="copyDaily">
@@ -533,25 +636,100 @@ onMounted(() => {
   padding: var(--sp-sm) 0;
   text-align: center;
 }
-.daily-loading {
+.daily-drafting {
+  width: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-lg);
+  padding: var(--sp-md) 0 var(--sp-sm);
+}
+.daily-draft-sheet {
+  width: min(320px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 24px;
+  text-align: left;
+  background: var(--canvas);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  box-shadow: 0 8px 22px rgba(20, 20, 19, 0.06);
+}
+.daily-draft-line {
+  display: block;
+  height: 5px;
+  border-radius: var(--r-pill);
+  background:
+    linear-gradient(90deg, var(--surface-cream-strong) 0%, var(--primary) 50%, var(--surface-cream-strong) 100%);
+  background-size: 220% 100%;
+  opacity: 0.45;
+  animation: daily-line-breathe 1.4s ease-in-out infinite;
+}
+.daily-draft-line-1 {
+  width: 58%;
+}
+.daily-draft-line-2 {
+  width: 92%;
+  animation-delay: 0.2s;
+}
+.daily-draft-line-3 {
+  width: 74%;
+  animation-delay: 0.4s;
+}
+.daily-wait-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.daily-wait-title {
+  color: var(--body-strong);
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 1.35;
+}
+.daily-wait-hint {
   color: var(--muted);
-  font-size: 14px;
-  padding: var(--sp-lg) 0;
+  font-size: 13px;
 }
-.daily-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--hairline);
-  border-top-color: var(--primary);
+.daily-wait-dots {
+  display: flex;
+  gap: 5px;
+}
+.daily-wait-dots span {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  animation: daily-spin 0.8s linear infinite;
+  background: var(--primary);
+  opacity: 0.35;
+  animation: daily-dot-breathe 1.2s ease-in-out infinite;
 }
-@keyframes daily-spin {
-  to {
-    transform: rotate(360deg);
+.daily-wait-dots span:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.daily-wait-dots span:nth-child(3) {
+  animation-delay: 0.36s;
+}
+@keyframes daily-line-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+    background-position: 100% 0;
+  }
+  50% {
+    opacity: 1;
+    background-position: 0 0;
+  }
+}
+@keyframes daily-dot-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: translateY(-2px);
   }
 }
 .daily-error {
@@ -595,6 +773,13 @@ onMounted(() => {
   }
   .filter-actions {
     margin-left: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .daily-draft-line,
+  .daily-wait-dots span {
+    animation: none;
   }
 }
 </style>
