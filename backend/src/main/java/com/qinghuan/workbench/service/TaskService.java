@@ -12,6 +12,7 @@ import com.qinghuan.workbench.security.LoginUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
@@ -26,6 +27,7 @@ public class TaskService {
     private final TaskMapper taskMapper;
     private final TaskScopeService taskScopeService;
     private final SysUserMapper ownerMapper;
+    private final DailySummaryCacheService summaryCache;
 
     public IPage<Task> page(long page, long size, LocalDate taskDate,
                             String taskType, String status, Long ownerId,
@@ -48,6 +50,7 @@ public class TaskService {
         return task;
     }
 
+    @Transactional
     public Task create(Task task, LoginUser user) {
         Long ownerId = taskScopeService.canManageAll(user)
                 ? (task.getOwnerId() == null ? user.getId() : task.getOwnerId())
@@ -57,11 +60,15 @@ public class TaskService {
         task.setOwnerId(ownerId);
         task.setOwnerName(owner.getDisplayName());
         taskMapper.insert(task);
+        summaryCache.evictAfterCommit(ownerId, task.getTaskDate());
         return task;
     }
 
+    @Transactional
     public boolean update(Task task, LoginUser user) {
         Task current = taskScopeService.requireManageable(task.getId(), user);
+        Long oldOwnerId = current.getOwnerId();
+        LocalDate oldTaskDate = current.getTaskDate();
         if (!taskScopeService.canManageAll(user)) {
             task.setOwnerId(user.getId());
         } else if (task.getOwnerId() == null) {
@@ -75,12 +82,21 @@ public class TaskService {
         }
         task.setOwnerName(owner.getDisplayName());
         taskMapper.updateById(task);
+        summaryCache.evictAfterCommit(oldOwnerId, oldTaskDate);
+        if (!task.getOwnerId().equals(oldOwnerId) || !task.getTaskDate().equals(oldTaskDate)) {
+            summaryCache.evictAfterCommit(task.getOwnerId(), task.getTaskDate());
+        }
         return true;
     }
 
+    @Transactional
     public boolean delete(Long id, LoginUser user) {
-        taskScopeService.requireManageable(id, user);
-        return taskMapper.deleteById(id) > 0;
+        Task current = taskScopeService.requireManageable(id, user);
+        boolean deleted = taskMapper.deleteById(id) > 0;
+        if (deleted) {
+            summaryCache.evictAfterCommit(current.getOwnerId(), current.getTaskDate());
+        }
+        return deleted;
     }
 
     public List<Task> listForStats(LocalDate date, LoginUser user) {

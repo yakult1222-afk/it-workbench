@@ -23,6 +23,7 @@ class TaskServiceTest {
     private TaskMapper taskMapper;
     private TaskScopeService taskScopeService;
     private SysUserMapper ownerMapper;
+    private DailySummaryCacheService summaryCache;
     private TaskService service;
 
     @BeforeEach
@@ -30,7 +31,8 @@ class TaskServiceTest {
         taskMapper = mock(TaskMapper.class);
         taskScopeService = mock(TaskScopeService.class);
         ownerMapper = mock(SysUserMapper.class);
-        service = new TaskService(taskMapper, taskScopeService, ownerMapper);
+        summaryCache = mock(DailySummaryCacheService.class);
+        service = new TaskService(taskMapper, taskScopeService, ownerMapper, summaryCache);
     }
 
     @Test
@@ -69,6 +71,49 @@ class TaskServiceTest {
                 () -> service.update(request, user));
 
         assertEquals(HttpStatus.FORBIDDEN, ex.getStatus());
+    }
+
+    @Test
+    void createInvalidatesSummaryForTaskOwnerAndDate() {
+        LoginUser user = loginUser(7L, "task:self:view", "task:self:manage");
+        when(taskScopeService.canManageAll(user)).thenReturn(false);
+        when(ownerMapper.selectById(7L)).thenReturn(enabledUser(7L));
+        Task request = task(null, 7L);
+        LocalDate date = LocalDate.of(2026, 10, 26);
+        request.setTaskDate(date);
+
+        service.create(request, user);
+
+        verify(summaryCache).evictAfterCommit(7L, date);
+    }
+
+    @Test
+    void deleteInvalidatesSummaryForDeletedTask() {
+        LoginUser user = loginUser(7L, "task:self:view", "task:self:manage");
+        Task current = task(3L, 7L);
+        when(taskScopeService.requireManageable(3L, user)).thenReturn(current);
+        when(taskMapper.deleteById(3L)).thenReturn(1);
+
+        service.delete(3L, user);
+
+        verify(summaryCache).evictAfterCommit(7L, current.getTaskDate());
+    }
+
+    @Test
+    void updateInvalidatesOldAndNewSummaryScopes() {
+        LoginUser user = loginUser(2L, "task:view:all", "task:manage:all");
+        Task current = task(3L, 7L);
+        current.setTaskDate(LocalDate.of(2026, 10, 25));
+        Task request = task(3L, 8L);
+        request.setTaskDate(LocalDate.of(2026, 10, 26));
+        when(taskScopeService.requireManageable(3L, user)).thenReturn(current);
+        when(taskScopeService.canManageAll(user)).thenReturn(true);
+        when(ownerMapper.selectById(8L)).thenReturn(enabledUser(8L));
+
+        service.update(request, user);
+
+        verify(summaryCache).evictAfterCommit(7L, LocalDate.of(2026, 10, 25));
+        verify(summaryCache).evictAfterCommit(8L, LocalDate.of(2026, 10, 26));
     }
 
     private static LoginUser loginUser(Long id, String... permissions) {
