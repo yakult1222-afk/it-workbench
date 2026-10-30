@@ -52,7 +52,7 @@ class DailySummaryJobServiceTest {
         DailySummaryJobView result = service.submit(7L, date);
 
         assertEquals(cached, result);
-        verify(mapper, never()).insert(any());
+        verify(mapper, never()).insert(any(AiSummaryJob.class));
     }
 
     @Test
@@ -67,7 +67,7 @@ class DailySummaryJobServiceTest {
         DailySummaryJobView result = service.submit(7L, date);
 
         assertEquals(31L, result.jobId());
-        verify(mapper, never()).insert(any());
+        verify(mapper, never()).insert(any(AiSummaryJob.class));
     }
 
     @Test
@@ -92,7 +92,7 @@ class DailySummaryJobServiceTest {
         DailySummaryJobView result = service.submit(7L, date);
 
         assertEquals("QUEUED", result.status());
-        verify(mapper).updateById(argThat(job ->
+        verify(mapper).updateById(argThat((AiSummaryJob job) ->
                 "QUEUED".equals(job.getStatus()) && job.getAttemptCount() == 0));
     }
 

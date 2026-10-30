@@ -4,6 +4,22 @@ server:
 spring:
   profiles:
     default: dev
+  ai:
+    # OpenAI 兼容协议（DeepSeek / GLM / 通义 / OpenAI / Ollama 均可），由 spring-ai-starter-model-openai 装配
+    openai:
+      # 留空占位 = 不调 AI，日报走模板汇总（DailySummaryService.aiEnabled() 判断）
+      api-key: ${AI_API_KEY:sk-not-configured}
+      # 语义与旧配置一致：含版本前缀的完整 base，请求路径由 completions-path 拼接
+      base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
+      chat:
+        completions-path: /chat/completions
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.4
+          max-tokens: 500
+    retry:
+      # 关闭 Spring AI 内置重试：外层 DailySummaryWorker 已有 max-attempts=3 + 5/20/60s 退避的重试体系，避免双层叠加
+      max-attempts: 1
   datasource:
     # 通过环境变量覆盖：MYSQL_HOST / MYSQL_PORT / MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:it_workbench}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
@@ -27,7 +43,7 @@ mybatis-plus:
   global-config:
     banner: false
 
-# 日报总结 AI 配置（OpenAI 兼容协议：DeepSeek / GLM / 通义 / OpenAI / Ollama 均可）
+# 应用自有配置（JWT / CORS / 日报异步任务体系）
 workbench:
   jwt:
     secret: ${JWT_SECRET:}
@@ -43,11 +59,6 @@ workbench:
       lease-seconds: ${AI_SUMMARY_LEASE_SECONDS:120}
       max-attempts: ${AI_SUMMARY_MAX_ATTEMPTS:3}
       retry-delays-seconds: ${AI_SUMMARY_RETRY_DELAYS_SECONDS:5,20,60}
-  ai:
-    base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
-    api-key: ${AI_API_KEY:}      # 留空 = 不调 AI，日报走模板汇总
-    model: ${AI_MODEL:deepseek-chat}
-    timeout-ms: 30000
 
 logging:
   level:

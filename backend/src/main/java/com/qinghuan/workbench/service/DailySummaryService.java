@@ -1,16 +1,12 @@
 package com.qinghuan.workbench.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qinghuan.workbench.entity.Task;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
 
-import java.net.Proxy;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -19,14 +15,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 日报总结服务：将当日任务交由 AI（OpenAI 兼容接口）汇总为约 200 字日报；
+ * 日报总结服务：将当日任务交由 AI（Spring AI ChatClient，OpenAI 兼容协议）汇总为约 200 字日报；
  * 未配置 API Key 或调用失败时，降级为模板汇总，保证功能不中断。
  *
- * 配置（均可用环境变量覆盖）：
- *   workbench.ai.base-url  AI_BASE_URL   默认 https://api.deepseek.com/v1
- *   workbench.ai.api-key   AI_API_KEY    默认空（= 降级模板）
- *   workbench.ai.model     AI_MODEL      默认 deepseek-chat
- *   workbench.ai.timeout-ms             默认 30000
+ * 配置（均可用环境变量覆盖，语义与旧版一致）：
+ *   spring.ai.openai.base-url              AI_BASE_URL   默认 https://api.deepseek.com/v1
+ *   spring.ai.openai.api-key               AI_API_KEY    默认占位 sk-not-configured（= 降级模板）
+ *   spring.ai.openai.chat.options.model    AI_MODEL      默认 deepseek-chat
+ *   出站超时 / 无代理直连：见 AiRestClientConfig（30s）
  */
 @Slf4j
 @Service
@@ -42,27 +38,24 @@ public class DailySummaryService {
 
     private static final DateTimeFormatter DATE_CN = DateTimeFormatter.ofPattern("yyyy年M月d日");
 
+    /** API Key 未配置时的占位值（与 application.yml 默认值对应），Spring AI 装配需要非空 key */
+    static final String API_KEY_PLACEHOLDER = "sk-not-configured";
+
     private final TaskService taskService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final String baseUrl;
     private final String apiKey;
-    private final String model;
-    private final int timeoutMs;
-
-    private volatile RestClient restClient;
+    private final ChatClient chatClient;
 
     public DailySummaryService(
             TaskService taskService,
-            @Value("${workbench.ai.base-url:https://api.deepseek.com/v1}") String baseUrl,
-            @Value("${workbench.ai.api-key:}") String apiKey,
-            @Value("${workbench.ai.model:deepseek-chat}") String model,
-            @Value("${workbench.ai.timeout-ms:30000}") int timeoutMs) {
+            ChatClient.Builder chatClientBuilder,
+            @Value("${spring.ai.openai.api-key:}") String apiKey) {
         this.taskService = taskService;
-        this.baseUrl = baseUrl == null ? "" : baseUrl.trim().replaceAll("/+$", "");
         this.apiKey = apiKey == null ? "" : apiKey.trim();
-        this.model = model;
-        this.timeoutMs = timeoutMs;
+        this.chatClient = chatClientBuilder
+                .defaultSystem(SYSTEM_PROMPT)
+                .build();
     }
 
     /**
@@ -97,59 +90,20 @@ public class DailySummaryService {
     }
 
     boolean aiEnabled() {
-        return !apiKey.isBlank() && !baseUrl.isBlank();
+        return !apiKey.isBlank() && !API_KEY_PLACEHOLDER.equals(apiKey);
     }
 
-    // ---------- AI 调用（OpenAI 兼容 /chat/completions）----------
+    // ---------- AI 调用（Spring AI ChatClient，OpenAI 兼容协议） ----------
 
-    String callAi(LocalDate date, List<Task> tasks) throws Exception {
-        Map<String, Object> body = Map.of(
-                "model", model,
-                "temperature", 0.4,
-                "max_tokens", 500,
-                "messages", List.of(
-                        Map.of("role", "system", "content", SYSTEM_PROMPT),
-                        Map.of("role", "user", "content", buildUserPrompt(date, tasks))
-                )
-        );
-        String resp = restClient().post()
-                .uri("/chat/completions")
-                .header("Authorization", "Bearer " + apiKey)
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(body)
-                .retrieve()
-                .body(String.class);
-        JsonNode content = objectMapper.readTree(resp == null ? "" : resp)
-                .path("choices").path(0).path("message").path("content");
-        if (content.isMissingNode() || content.asText().isBlank()) {
+    String callAi(LocalDate date, List<Task> tasks) {
+        String content = chatClient.prompt()
+                .user(buildUserPrompt(date, tasks))
+                .call()
+                .content();
+        if (content == null || content.isBlank()) {
             throw new IllegalStateException("AI 返回内容为空");
         }
-        return content.asText().trim();
-    }
-
-    private RestClient restClient() {
-        RestClient client = restClient;
-        if (client == null) {
-            synchronized (this) {
-                if (restClient == null) {
-                    restClient = RestClient.builder()
-                            .baseUrl(baseUrl)
-                            .requestFactory(buildRequestFactory())
-                            .build();
-                }
-                client = restClient;
-            }
-        }
-        return client;
-    }
-
-    private SimpleClientHttpRequestFactory buildRequestFactory() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(timeoutMs);
-        factory.setReadTimeout(timeoutMs);
-        // 避免系统代理干扰 localhost 调试；直连外部 AI 服务
-        factory.setProxy(Proxy.NO_PROXY);
-        return factory;
+        return content.trim();
     }
 
     /** 用户消息：日期 + 任务列表 JSON（字段名用中文，模型理解更稳） */
