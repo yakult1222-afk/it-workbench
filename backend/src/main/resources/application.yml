@@ -4,6 +4,22 @@ server:
 spring:
   profiles:
     default: dev
+  ai:
+    # OpenAI 兼容协议（DeepSeek / GLM / 通义 / OpenAI / Ollama 均可），由 spring-ai-starter-model-openai 装配
+    openai:
+      # 留空占位 = 不调 AI，日报走模板汇总（DailySummaryService.aiEnabled() 判断）
+      api-key: ${AI_API_KEY:sk-not-configured}
+      # 语义与旧配置一致：含版本前缀的完整 base，请求路径由 completions-path 拼接
+      base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
+      chat:
+        completions-path: /chat/completions
+        options:
+          model: ${AI_MODEL:deepseek-chat}
+          temperature: 0.5
+          max-tokens: 800
+    retry:
+      # 关闭 Spring AI 内置重试：外层 DailySummaryWorker 已有 max-attempts=3 + 5/20/60s 退避的重试体系，避免双层叠加
+      max-attempts: 1
   datasource:
     # 通过环境变量覆盖：MYSQL_HOST / MYSQL_PORT / MYSQL_DB / MYSQL_USER / MYSQL_PASSWORD
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:it_workbench}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
@@ -13,6 +29,12 @@ spring:
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT_MS:2000}ms
 
 mybatis-plus:
   configuration:
@@ -21,18 +43,22 @@ mybatis-plus:
   global-config:
     banner: false
 
-# 日报总结 AI 配置（OpenAI 兼容协议：DeepSeek / GLM / 通义 / OpenAI / Ollama 均可）
+# 应用自有配置（JWT / CORS / 日报异步任务体系）
 workbench:
   jwt:
     secret: ${JWT_SECRET:}
     expire-hours: ${JWT_EXPIRE_HOURS:8}
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080}
-  ai:
-    base-url: ${AI_BASE_URL:https://api.deepseek.com/v1}
-    api-key: ${AI_API_KEY:}      # 留空 = 不调 AI，日报走模板汇总
-    model: ${AI_MODEL:deepseek-chat}
-    timeout-ms: 30000
+  daily-summary:
+    cache-ttl-seconds: ${AI_SUMMARY_CACHE_TTL_SECONDS:1800}
+    worker:
+      enabled: ${AI_SUMMARY_WORKER_ENABLED:true}
+      poll-interval-ms: ${AI_SUMMARY_POLL_INTERVAL_MS:1000}
+      concurrency: ${AI_SUMMARY_CONCURRENCY:2}
+      lease-seconds: ${AI_SUMMARY_LEASE_SECONDS:120}
+      max-attempts: ${AI_SUMMARY_MAX_ATTEMPTS:3}
+      retry-delays-seconds: ${AI_SUMMARY_RETRY_DELAYS_SECONDS:5,20,60}
 
 logging:
   level:

@@ -7,6 +7,11 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.retry.support.RetryTemplate;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -49,17 +54,36 @@ class DailySummaryServiceTest {
         );
     }
 
-    private DailySummaryService service(String baseUrl, String apiKey) {
+    /** 构建指向 aiBaseUrl 的 ChatClient.Builder（OpenAI 兼容协议，completions-path 与主配置一致） */
+    private ChatClient.Builder chatClientBuilder(String aiBaseUrl) {
+        OpenAiApi api = OpenAiApi.builder()
+                .baseUrl(aiBaseUrl)
+                .apiKey("test-key")
+                .completionsPath("/chat/completions")
+                .build();
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiApi(api)
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .model("test-model")
+                        .temperature(0.4)
+                        .maxTokens(500)
+                        .build())
+                .retryTemplate(RetryTemplate.builder().maxAttempts(1).build())
+                .build();
+        return ChatClient.builder(chatModel);
+    }
+
+    private DailySummaryService service(String aiBaseUrl, String apiKey) {
         TaskService taskService = Mockito.mock(TaskService.class);
         when(taskService.listByDate(date, 7L)).thenReturn(sampleTasks());
-        return new DailySummaryService(taskService, baseUrl, apiKey, "test-model", 5000);
+        return new DailySummaryService(taskService, chatClientBuilder(aiBaseUrl), apiKey);
     }
 
     // ---------- AI 调用路径 ----------
 
     @Test
     void 调用AI成功时返回AI内容() throws Exception {
-        server = stubServer(200, "{\"choices\":[{\"message\":{\"content\":\"今日共处理 4 项任务，两项已完成……\"}}]}");
+        server = stubServer(200, openAiBody("今日共处理 4 项任务，两项已完成……"));
         DailySummaryService svc = service("http://127.0.0.1:" + server.getAddress().getPort() + "/v1", "test-key");
 
         var result = svc.summarize(date, 7L);
@@ -87,7 +111,7 @@ class DailySummaryServiceTest {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             captured.append(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-            byte[] resp = "{\"choices\":[{\"message\":{\"content\":\"ok\"}}]}".getBytes(StandardCharsets.UTF_8);
+            byte[] resp = openAiBody("ok").getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, resp.length);
             exchange.getResponseBody().write(resp);
@@ -127,10 +151,20 @@ class DailySummaryServiceTest {
     }
 
     @Test
+    void apiKey为占位值时直接走模板() {
+        DailySummaryService svc = service("https://api.deepseek.com/v1", "sk-not-configured");
+
+        var result = svc.summarize(date, 7L);
+
+        assertEquals("template", result.get("source"));
+    }
+
+    @Test
     void 无任务时模板给出空提示() {
         TaskService taskService = Mockito.mock(TaskService.class);
         when(taskService.listByDate(date, 7L)).thenReturn(List.of());
-        DailySummaryService svc = new DailySummaryService(taskService, "https://api.deepseek.com/v1", "key", "m", 5000);
+        DailySummaryService svc = new DailySummaryService(
+                taskService, chatClientBuilder("https://api.deepseek.com/v1"), "key");
 
         var result = svc.summarize(date, 7L);
 
@@ -145,16 +179,10 @@ class DailySummaryServiceTest {
         when(taskService.listByDate(date, 7L)).thenReturn(List.of());
 
         DailySummaryService svc = new DailySummaryService(
-                taskService, "", "", "m", 5000);
+                taskService, chatClientBuilder("https://api.deepseek.com/v1"), "");
         svc.summarize(date, 7L);
 
         Mockito.verify(taskService).listByDate(date, 7L);
-    }
-
-    @Test
-    void baseUrl末尾斜杠被规范化() {
-        DailySummaryService svc = service("https://api.deepseek.com/v1/", "key");
-        assertTrue(svc.aiEnabled());
     }
 
     private HttpServer stubServer(int status, String responseBody) throws IOException {
@@ -168,5 +196,14 @@ class DailySummaryServiceTest {
         });
         s.start();
         return s;
+    }
+
+    /** 构造完整的 OpenAI chat completion 响应体（字段补全，避免严格反序列化失败） */
+    private static String openAiBody(String content) {
+        return "{\"id\":\"chatcmpl-test\",\"object\":\"chat.completion\",\"created\":1770000000,"
+                + "\"model\":\"test-model\",\"choices\":[{\"index\":0,"
+                + "\"message\":{\"role\":\"assistant\",\"content\":\"" + content + "\"},"
+                + "\"finish_reason\":\"stop\"}],"
+                + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":20,\"total_tokens\":30}}";
     }
 }

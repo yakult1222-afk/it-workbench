@@ -26,7 +26,7 @@ qinghuan_tasks="$(curl -fsS "$BASE_URL/api/tasks?page=1&size=1" \
   -H "Authorization: Bearer $qinghuan_token")"
 spoofed_tasks="$(curl -fsS "$BASE_URL/api/tasks?page=1&size=1&ownerId=2" \
   -H "Authorization: Bearer $qinghuan_token")"
-summary="$(curl -fsS "$BASE_URL/api/daily-summary" \
+summary_job="$(curl -fsS -X POST "$BASE_URL/api/daily-summary/jobs" \
   -H "Authorization: Bearer $qinghuan_token")"
 users="$(curl -fsS "$BASE_URL/api/users?page=1&size=10" \
   -H "Authorization: Bearer $admin_token")"
@@ -34,7 +34,7 @@ users="$(curl -fsS "$BASE_URL/api/users?page=1&size=10" \
 admin_total="$(printf '%s' "$admin_tasks" | json_value "['data']['total']")"
 qinghuan_total="$(printf '%s' "$qinghuan_tasks" | json_value "['data']['total']")"
 spoofed_total="$(printf '%s' "$spoofed_tasks" | json_value "['data']['total']")"
-summary_owner="$(printf '%s' "$summary" | json_value "['data']['ownerId']")"
+summary_job_id="$(printf '%s' "$summary_job" | json_value "['data']['jobId']")"
 user_total="$(printf '%s' "$users" | json_value "['data']['total']")"
 
 [ "$admin_total" = "$qinghuan_total" ] || {
@@ -45,10 +45,12 @@ user_total="$(printf '%s' "$users" | json_value "['data']['total']")"
   echo "normal user ownerId spoof changed result: $spoofed_total vs $qinghuan_total"
   exit 1
 }
-[ "$summary_owner" = "1" ] || {
-  echo "daily summary owner should be qinghuan id=1, got $summary_owner"
+case "$summary_job_id" in
+  ''|None|null)
+  echo "daily summary job was not created for qinghuan"
   exit 1
-}
+  ;;
+esac
 [ "$user_total" -ge 2 ] || {
   echo "expected at least two managed users, got $user_total"
   exit 1
@@ -60,4 +62,4 @@ unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' "$BASE_URL/api/auth/me"
   exit 1
 }
 
-echo "auth api ok: tasks=$admin_total users=$user_total summaryOwner=$summary_owner"
+echo "auth api ok: tasks=$admin_total users=$user_total summaryJob=$summary_job_id"
