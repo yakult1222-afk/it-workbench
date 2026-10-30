@@ -15,8 +15,8 @@ spring:
         completions-path: /chat/completions
         options:
           model: ${AI_MODEL:deepseek-chat}
-          temperature: 0.4
-          max-tokens: 500
+          temperature: 0.5
+          max-tokens: 800
     retry:
       # 关闭 Spring AI 内置重试：外层 DailySummaryWorker 已有 max-attempts=3 + 5/20/60s 退避的重试体系，避免双层叠加
       max-attempts: 1
